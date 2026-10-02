@@ -5,7 +5,7 @@ export function CenteredCard({ children, wide }: { children: React.ReactNode; wi
   return (
     <div className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-4 py-12">
       <div className="bg-grid absolute inset-0 opacity-50 [mask-image:radial-gradient(ellipse_at_center,black_10%,transparent_65%)]" />
-      <div className="absolute left-1/2 top-0 size-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#7b5cff]/20 blur-[120px]" />
+      <div className="absolute left-1/2 top-0 size-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#4f46e5]/20 blur-[120px]" />
       <div className="relative mb-8">
         <Logo />
       </div>

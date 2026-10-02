@@ -13,8 +13,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     <div className="grid min-h-dvh lg:grid-cols-[1fr_minmax(480px,560px)]">
       <aside className="relative hidden overflow-hidden border-r border-border bg-surface lg:flex lg:flex-col">
         <div className="bg-grid absolute inset-0 opacity-60 [mask-image:radial-gradient(ellipse_at_top_left,black_20%,transparent_70%)]" />
-        <div className="absolute -left-40 -top-40 size-[520px] rounded-full bg-[#7b5cff]/25 blur-[120px]" />
-        <div className="absolute -bottom-48 right-0 size-[480px] rounded-full bg-[#3dd6c6]/15 blur-[120px]" />
+        <div className="absolute -left-40 -top-40 size-[520px] rounded-full bg-[#4f46e5]/25 blur-[120px]" />
+        <div className="absolute -bottom-48 right-0 size-[480px] rounded-full bg-[#06b6d4]/12 blur-[120px]" />
         <div className="relative flex flex-1 flex-col p-12">
           <Logo />
           <div className="my-auto max-w-lg py-16">

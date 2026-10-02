@@ -24,6 +24,14 @@ export type WorkspaceSettings = {
   auto_stage_on_reply?: boolean;
   company_name?: string;
   currency?: string;
+  scoring?: ScoringSettings;
+};
+
+export type ScoringSettings = {
+  /** Which leads you pitch: those with a website, without one, or either. */
+  website_target?: 'any' | 'with' | 'without';
+  min_rating?: number;
+  min_reviews?: number;
 };
 
 export type Workspace = {
@@ -79,7 +87,17 @@ export type ScrapeLog = {
   text: string;
 };
 
+export type ScrapeQualify = {
+  min_rating?: number;
+  min_reviews?: number;
+  require_mobile?: boolean;
+  skip_closed?: boolean;
+  website?: 'any' | 'with' | 'without';
+  exclude_keywords?: string[];
+};
+
 export type ScrapeStats = {
+  disqualified?: number;
   found?: number;
   inserted?: number;
   duplicates?: number;
@@ -107,6 +125,7 @@ export type ScrapeJob = {
   cancel_requested: boolean;
   progress: { current?: number; total?: number; query?: string };
   stats: ScrapeStats;
+  qualify: ScrapeQualify;
   logs: ScrapeLog[];
   error: string | null;
   started_at: Timestamp | null;
@@ -154,6 +173,8 @@ export type Lead = {
   owner_id: UUID | null;
   tags: string[];
   deal_value: number;
+  score: number;
+  score_tier: 'hot' | 'warm' | 'cold';
   opted_out: boolean;
   opted_out_at: Timestamp | null;
   last_contacted_at: Timestamp | null;
@@ -174,11 +195,15 @@ export type LeadNote = {
   updated_at: Timestamp;
 };
 
+export type TaskType = 'todo' | 'call' | 'meeting' | 'follow_up';
+
 export type Task = {
   id: UUID;
   workspace_id: UUID;
   lead_id: UUID | null;
+  type: TaskType;
   title: string;
+  notes: string | null;
   due_at: Timestamp | null;
   assignee_id: UUID | null;
   completed_at: Timestamp | null;
@@ -214,6 +239,8 @@ export type WhatsappAccount = {
   warmup_started_at: Timestamp | null;
   shared: boolean;
   paused_until: Timestamp | null;
+  disconnect_count: number;
+  last_disconnect_at: Timestamp | null;
   created_at: Timestamp;
   updated_at: Timestamp;
 };
@@ -374,6 +401,8 @@ export type Notification = {
 
 export type EngineStatus = {
   id: string;
+  instance_id: string | null;
+  lease_until: Timestamp | null;
   version: string | null;
   started_at: Timestamp | null;
   heartbeat_at: Timestamp | null;
@@ -404,7 +433,146 @@ export type LeadFilters = {
   has_phone?: boolean;
   has_email?: boolean;
   sendable?: boolean;
+  tiers?: Array<'hot' | 'warm' | 'cold'>;
+  min_score?: number;
+  not_in_active_campaign?: boolean;
+  exclude_campaign_id?: UUID;
 };
+
+export type SavedView = {
+  id: UUID;
+  workspace_id: UUID;
+  name: string;
+  filters: LeadFilters;
+  shared: boolean;
+  created_by: UUID | null;
+  created_at: Timestamp;
+};
+
+export type DuplicateGroup = {
+  match_type: 'name_city' | 'website';
+  match_key: string;
+  lead_ids: UUID[];
+  names: string[];
+  total: number;
+};
+
+export type ChatChannel = {
+  id: UUID;
+  workspace_id: UUID;
+  kind: 'channel' | 'dm';
+  name: string | null;
+  description: string | null;
+  is_private: boolean;
+  is_default: boolean;
+  dm_key: string | null;
+  created_by: UUID | null;
+  last_message_at: Timestamp | null;
+  archived: boolean;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+};
+
+export type ChatMember = {
+  channel_id: UUID;
+  workspace_id: UUID;
+  user_id: UUID;
+  last_read_at: Timestamp;
+  muted: boolean;
+  joined_at: Timestamp;
+};
+
+export type ChatMessage = {
+  id: UUID;
+  workspace_id: UUID;
+  channel_id: UUID;
+  author_id: UUID | null;
+  body: string;
+  lead_id: UUID | null;
+  reply_to: UUID | null;
+  mentions: UUID[];
+  edited_at: Timestamp | null;
+  deleted_at: Timestamp | null;
+  created_at: Timestamp;
+};
+
+export type ChatReaction = {
+  message_id: UUID;
+  workspace_id: UUID;
+  user_id: UUID;
+  emoji: string;
+  created_at: Timestamp;
+};
+
+export type CampaignEvent = {
+  id: number;
+  workspace_id: UUID;
+  campaign_id: UUID;
+  lead_id: UUID | null;
+  account_id: UUID | null;
+  type: 'sent' | 'failed' | 'skipped' | 'replied' | 'opted_out' | 'started' | 'paused' | 'resumed' | 'completed' | 'waiting' | 'info';
+  message: string;
+  created_at: Timestamp;
+};
+
+export type AutomationTrigger = 'reply_received' | 'keyword' | 'stage_changed' | 'campaign_no_reply' | 'lead_created';
+
+export type AutomationAction =
+  | { type: 'send_template'; template_id: UUID }
+  | { type: 'send_text'; body: string }
+  | { type: 'move_stage'; stage_id: UUID }
+  | { type: 'assign'; user_id: UUID | 'round_robin' }
+  | { type: 'add_tag'; tag: string }
+  | { type: 'create_task'; title: string; due_in_hours?: number; assignee?: UUID | 'owner' }
+  | { type: 'notify'; target: 'owner' | 'admins' | UUID; message?: string };
+
+export type AutomationConditions = {
+  keywords?: string[];
+  match?: 'any' | 'exact';
+  stage_id?: UUID;
+  from_stage_id?: UUID;
+  campaign_id?: UUID;
+  first_reply_only?: boolean;
+  outside_hours?: { start: string; end: string; days: number[]; timezone: string } | null;
+  sources?: string[];
+};
+
+export type Automation = {
+  id: UUID;
+  workspace_id: UUID;
+  name: string;
+  enabled: boolean;
+  trigger: AutomationTrigger;
+  conditions: AutomationConditions;
+  actions: AutomationAction[];
+  created_by: UUID | null;
+  run_count: number;
+  last_run_at: Timestamp | null;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+};
+
+export type AutomationRun = {
+  id: number;
+  workspace_id: UUID;
+  automation_id: UUID;
+  lead_id: UUID | null;
+  status: 'success' | 'failed' | 'skipped';
+  detail: string;
+  created_at: Timestamp;
+};
+
+export type AccountHealth = {
+  account_id: UUID;
+  sent_today: number;
+  sent: number;
+  delivered: number;
+  read: number;
+  failed: number;
+  replies: number;
+};
+
+export type ChatOverviewRow = { channel_id: UUID; unread: number; mentions: number; last_message_at: Timestamp | null };
 
 export type DashboardOverview = {
   timezone: string;
@@ -509,6 +677,26 @@ export type Database = {
       notifications: TableDef<Notification, 'workspace_id' | 'user_id' | 'type' | 'title'>;
       engine_status: TableDef<EngineStatus, 'id'>;
       wa_auth_keys: TableDef<{ account_id: UUID; key: string; value: string; updated_at: Timestamp }, 'account_id' | 'key' | 'value'>;
+      saved_views: TableDef<SavedView, 'workspace_id' | 'name'>;
+      duplicate_dismissals: TableDef<
+        { workspace_id: UUID; match_type: string; match_key: string; dismissed_by: UUID | null; created_at: Timestamp },
+        'workspace_id' | 'match_type' | 'match_key'
+      >;
+      chat_channels: TableDef<ChatChannel, 'workspace_id'>;
+      chat_members: TableDef<ChatMember, 'channel_id' | 'workspace_id' | 'user_id'>;
+      chat_messages: TableDef<
+        ChatMessage,
+        'workspace_id' | 'channel_id',
+        [Rel<'chat_messages_workspace_id_lead_id_fkey', ['workspace_id', 'lead_id'], 'leads', ['workspace_id', 'id']>]
+      >;
+      chat_reactions: TableDef<ChatReaction, 'message_id' | 'workspace_id' | 'user_id' | 'emoji'>;
+      campaign_events: TableDef<CampaignEvent, 'workspace_id' | 'campaign_id' | 'type'>;
+      automations: TableDef<Automation, 'workspace_id' | 'name' | 'trigger'>;
+      automation_runs: TableDef<AutomationRun, 'workspace_id' | 'automation_id' | 'status'>;
+      automation_queue: TableDef<
+        { id: number; workspace_id: UUID; trigger: string; lead_id: UUID | null; payload: Record<string, unknown>; created_at: Timestamp; processed_at: Timestamp | null },
+        'workspace_id' | 'trigger'
+      >;
     };
     Views: {
       campaign_stats: { Row: CampaignStats; Relationships: [] };
@@ -543,6 +731,19 @@ export type Database = {
       };
       dashboard_overview: { Args: { p_workspace: string; p_days?: number }; Returns: DashboardOverview };
       team_performance: { Args: { p_workspace: string; p_days?: number }; Returns: TeamPerformanceRow[] };
+      rescore_leads: { Args: { p_workspace: string }; Returns: number };
+      lead_duplicate_groups: { Args: { p_workspace: string; p_limit?: number }; Returns: DuplicateGroup[] };
+      merge_leads: { Args: { p_keep: string; p_merge: string[] }; Returns: number };
+      chat_create_channel: {
+        Args: { p_workspace: string; p_name: string; p_description?: string | null; p_private?: boolean; p_member_ids?: string[] };
+        Returns: string;
+      };
+      chat_open_dm: { Args: { p_workspace: string; p_user_ids: string[] }; Returns: string };
+      chat_add_members: { Args: { p_channel: string; p_user_ids: string[] }; Returns: number };
+      chat_overview: { Args: { p_workspace: string }; Returns: ChatOverviewRow[] };
+      account_health: { Args: { p_workspace: string; p_days?: number }; Returns: AccountHealth[] };
+      engine_acquire_lease: { Args: { p_instance: string; p_ttl_seconds?: number }; Returns: boolean };
+      engine_release_lease: { Args: { p_instance: string }; Returns: undefined };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

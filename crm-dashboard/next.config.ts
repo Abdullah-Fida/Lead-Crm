@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(import.meta.dirname, '..'),
   transpilePackages: ['@batsols/shared'],
   poweredByHeader: false,
+  devIndicators: { position: 'bottom-right' },
   images: {
     remotePatterns: [{ protocol: 'https', hostname: '*.supabase.co' }],
   },

@@ -1,4 +1,4 @@
-# BatSols CRM — Build Plan
+# BatSols — Build Plan
 
 Goal: turn the current prototype into a hosted, multi-user SaaS for the company's marketing team.
 Team members log in, connect **their own WhatsApp by scanning a QR code in the browser**, find leads
@@ -138,6 +138,37 @@ on Google Maps, and run safe, trackable WhatsApp campaigns. All of it runs on Re
 - Engine health indicator (online/offline) in the sidebar
 - Responsive layout (works on a phone), keyboard-friendly, skeleton loading states, empty states
 
+### Team chat (internal)
+- Channels (group chats) — `#general` by default, create public or private channels, add/remove members
+- Direct messages (1:1 and small groups) between teammates
+- @mentions with notifications, emoji reactions, edit/delete own messages, unread counts, live updates
+- Share a lead into a chat (renders as a lead card that opens the lead)
+
+### Lead qualifier & data quality
+- **Lead score 0–100** with tiers *Hot / Warm / Cold*, recalculated automatically, based on: mobile number,
+  verified WhatsApp, Google rating & review count, website presence (matched to what you sell), email found,
+  replies — weights configurable per workspace
+- **Qualification rules on every lead search**: minimum rating/reviews, mobile numbers only, skip businesses
+  without a phone, skip permanently-closed listings, exclude name keywords (e.g. chains)
+- **No duplicates**: phone and Google place ID are unique per workspace (enforced by the database), plus a
+  *Possible duplicates* view (same name + city, same website) with one-click merge
+- **No double outreach**: a lead already in another team member's active campaign is skipped by default
+
+### Automations
+- Rules: *when* (reply received · reply contains keyword · stage changed · campaign finished without reply ·
+  new lead created) → *do* (send template · move stage · assign owner · add tag · create task · notify team)
+- Optional auto-reply outside working hours; every run logged
+
+### WhatsApp reliability ("connect once, stay connected")
+- Sessions stored in Postgres (survive restarts and redeploys)
+- Automatic reconnect with exponential backoff, immediate restart on WhatsApp's "restart required" signal,
+  watchdog that recreates stuck sockets, keep-alive pings
+- **Single active engine lease**: during a Render redeploy the new engine waits for the old one to hand over,
+  because two engines on one session make WhatsApp log the device out
+- Alerts when a number drops and when it recovers; number health page (sent today, delivery/read/reply rate,
+  failures, warm-up progress)
+- Note: WhatsApp itself unlinks devices if the phone stays offline for ~14 days; the app warns before that
+
 ### Later / optional (after the core is done)
 - AI message writer and AI reply suggestions (needs an Anthropic API key)
 - Outgoing webhooks and a public API for other tools
@@ -196,8 +227,13 @@ Lead Crm/
 | 2 | WhatsApp | Engine skeleton, Baileys sessions in Postgres, QR + pairing-code connect UI, single send, inbound capture, delivery receipts, team inbox |
 | 3 | Campaigns | Templates, builder wizard, scheduler with all safeguards, follow-ups, detail page, analytics |
 | 4 | Scraper | Places API + Playwright providers, job builder, live console, enrichment, dedup |
-| 5 | Insights | Dashboard, analytics, team leaderboard, notifications, command palette polish |
-| 6 | Ship | Dockerfile, `render.yaml`, env docs, README/runbook, security review, final QA |
+| 5 | Team & quality | Team chat, lead scoring & qualifier, duplicate merge, saved segments, automations |
+| 6 | Insights | Dashboard, analytics, team leaderboard, number health, notifications polish |
+| 7 | Ship | Dockerfile, `render.yaml`, env docs, README/runbook, security review, full end-to-end QA on a local Supabase stack |
+
+**Design direction:** enterprise-grade and clean. One consistent design system (tokens for light and dark
+themes), lucide line icons and custom SVG illustrations (no emoji), Inter typography, generous spacing, and
+dense-but-calm data tables.
 
 Each phase ends with type-checks, a production build, and automated tests passing.
 

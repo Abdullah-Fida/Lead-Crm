@@ -32,6 +32,8 @@ beforeAll(async () => {
   wsB = (await asUser(db, bob, (tx) => one<{ id: string }>(tx, `select public.create_workspace('Agency B') as id`))).id;
   await addMember(wsA, carol, 'member');
   await addMember(wsA, victor, 'viewer');
+  // These tests cover the classic "everyone sees every lead" mode; personal spaces are tested in spaces.test.ts.
+  await db.query(`update public.workspaces set settings = settings || '{"members_see_all_leads": true}' where id = $1`, [wsA]);
 }, 60_000);
 
 describe('signup & workspaces', () => {
