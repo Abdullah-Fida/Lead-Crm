@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhatsApp Bulk Sender — Complete Guide</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #f0f4f8;
+    color: #1a202c;
+    line-height: 1.7;
+  }
+
+  /* ── Header ── */
+  .hero {
+    background: linear-gradient(135deg, #075e54 0%, #128c7e 50%, #25d366 100%);
+    color: white;
+    padding: 48px 40px 36px;
+    text-align: center;
+  }
+  .hero h1 { font-size: 2.2rem; font-weight: 700; margin-bottom: 10px; }
+  .hero p  { font-size: 1.05rem; opacity: 0.9; max-width: 620px; margin: 0 auto; }
+  .badge-row { display: flex; justify-content: center; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+  .badge {
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.35);
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+
+  /* ── Layout ── */
+  .container { max-width: 900px; margin: 0 auto; padding: 36px 20px 60px; }
+
+  /* ── Section cards ── */
+  .section {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    margin-bottom: 28px;
+    overflow: hidden;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 18px 24px;
+    background: linear-gradient(90deg, #075e54, #128c7e);
+    color: white;
+  }
+  .section-number {
+    background: rgba(255,255,255,0.22);
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.95rem; flex-shrink: 0;
+  }
+  .section-title { font-size: 1.1rem; font-weight: 600; }
+  .section-body { padding: 22px 24px; }
+
+  /* ── Step boxes ── */
+  .step-list { list-style: none; counter-reset: steps; }
+  .step-list li {
+    counter-increment: steps;
+    display: flex;
+    gap: 14px;
+    margin-bottom: 16px;
+    align-items: flex-start;
+  }
+  .step-list li::before {
+    content: counter(steps);
+    background: #25d366;
+    color: white;
+    font-weight: 700;
+    font-size: 0.85rem;
+    min-width: 26px; height: 26px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 2px;
+  }
+
+  /* ── Code blocks ── */
+  .code-block {
+    background: #1a202c;
+    color: #a8ff78;
+    padding: 16px 20px;
+    border-radius: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.87rem;
+    overflow-x: auto;
+    margin: 14px 0;
+    line-height: 1.6;
+  }
+  .code-block .comment { color: #718096; }
+  .code-block .keyword { color: #ffd700; }
+  .code-block .string  { color: #98c379; }
+  .code-block .cmd { color: #61dafb; }
+
+  /* ── Info boxes ── */
+  .info-box {
+    padding: 14px 18px;
+    border-radius: 8px;
+    margin: 14px 0;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .info-box.tip    { background: #ebfdf4; border-left: 4px solid #25d366; }
+  .info-box.warn   { background: #fffbeb; border-left: 4px solid #f6c90e; }
+  .info-box.danger { background: #fff5f5; border-left: 4px solid #e53e3e; }
+  .info-box .icon  { font-size: 1.2rem; flex-shrink: 0; margin-top: 2px; }
+  .info-box p      { font-size: 0.92rem; }
+
+  /* ── Table ── */
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 0.91rem; }
+  th { background: #075e54; color: white; padding: 10px 14px; text-align: left; }
+  td { padding: 10px 14px; border-bottom: 1px solid #e2e8f0; }
+  tr:nth-child(even) td { background: #f7fafc; }
+
+  /* ── Workflow diagram ── */
+  .workflow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    padding: 10px 0;
+  }
+  .wf-box {
+    background: linear-gradient(135deg, #075e54, #128c7e);
+    color: white;
+    padding: 12px 32px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    min-width: 240px;
+    text-align: center;
+  }
+  .wf-arrow { font-size: 1.5rem; color: #25d366; line-height: 1.2; }
+
+  /* ── Error table ── */
+  .error-row td:first-child { font-weight: 600; color: #c53030; }
+  .fix { color: #276749; font-size: 0.88rem; }
+
+  /* ── File box ── */
+  .file-box {
+    background: #1a202c;
+    color: #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 14px 0;
+  }
+  .file-box-header {
+    background: #2d3748;
+    padding: 8px 16px;
+    font-size: 0.82rem;
+    color: #a0aec0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .file-box-body {
+    padding: 14px 20px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.87rem;
+    line-height: 1.8;
+  }
+
+  h3 { color: #2d3748; margin: 18px 0 8px; font-size: 1rem; }
+  p  { margin-bottom: 10px; font-size: 0.94rem; }
+  ul { padding-left: 20px; margin-bottom: 10px; }
+  li { margin-bottom: 5px; font-size: 0.93rem; }
+  strong { color: #1a202c; }
+
+  .highlight { color: #075e54; font-weight: 700; }
+  .pill {
+    display: inline-block;
+    background: #ebfdf4;
+    color: #276749;
+    border: 1px solid #c6f6d5;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin: 2px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ HERO ══════════════ -->
+<div class="hero">
+  <h1>📱 WhatsApp Bulk Sender</h1>
+  <p>Complete Step-by-Step Guide — Free, Manual, Beginner-Friendly</p>
+  <div class="badge-row">
+    <span class="badge">✅ 100% Free</span>
+    <span class="badge">🐍 Python</span>
+    <span class="badge">🌐 WhatsApp Web</span>
+    <span class="badge">🤖 Selenium</span>
+    <span class="badge">📄 CSV Input</span>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- ══════════════ SECTION 1: OVERVIEW ══════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-number">1</div>
+    <div class="section-title">System Overview — How It Works</div>
+  </div>
+  <div class="section-body">
+    <p>The system reads phone numbers from your CSV file, opens WhatsApp Web in Chrome, and sends your message to each number — one at a time — with random delays for safety.</p>
+
+    <div class="workflow">
+      <div class="wf-box">📄 CSV File (Phone Numbers)</div>
+      <div class="wf-arrow">↓</div>
+      <div class="wf-box">🐍 Python Script</div>
+      <div class="wf-arrow">↓</div>
+      <div class="wf-box">🌐 Chrome + Selenium Automation</div>
+      <div class="wf-arrow">↓</div>
+      <div class="wf-box">💬 WhatsApp Web Opens Each Chat</div>
+      <div class="wf-arrow">↓</div>
+      <div class="wf-box">✅ Message Sent — Next Number</div>
+    </div>
+
+    <div class="info-box tip">
+      <div class="icon">💡</div>
+      <p><strong>Key Concept:</strong> The script uses a direct link format — <code>https://web.whatsapp.com/send?phone=NUMBER&text=MESSAGE</code> — to open a pre-filled chat. Then it automatically clicks Send. It processes numbers one by one with a random 25–60 second wait between each.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ SECTION 2: INSTALLATION ══════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-number">2</div>
+    <div class="section-title">Software Installation</div>
+  </div>
+  <div class="section-body">
+
+    <h3>Step A — Install Python</h3>
+    <p>Download Python from <strong>python.org</strong> (version 3.8 or higher). During installation, check <strong>"Add Python to PATH"</strong>.</p>
+    <p>Verify it works by opening Terminal / Command Prompt and typing:</p>
+    <div class="code-block"><span class="cmd">python --version</span>
+<span class="comment"># Should print: Python 3.x.x</span></div>
+
+    <h3>Step B — Install Google Chrome</h3>
+    <p>Download and install <strong>Google Chrome</strong> from google.com/chrome. The script automatically downloads the matching ChromeDriver — no manual download needed.</p>
+
+    <h3>Step C — Install Python Libraries</h3>
+    <p>Open Terminal (Mac/Linux) or Command Prompt (Windows) and run:</p>
+    <div class="code-block"><span class="cmd">pip install selenium pandas webdriver-manager</span></div>
+
+    <div class="info-box tip">
+      <div class="icon">✅</div>
+      <p><strong>webdriver-manager</strong> automatically downloads and manages the correct ChromeDriver for your Chrome version. You never have to manually match versions again.</p>
+    </div>
+
+    <table>
+      <tr><th>Library</th><th>Purpose</th></tr>
+      <tr><td><strong>selenium</strong></td><td>Browser automation — controls Chrome</td></tr>
+      <tr><td><strong>pandas</strong></td><td>Reads and processes the CSV file</td></tr>
+      <tr><td><strong>webdriver-manager</strong></td><td>Auto-downloads the correct ChromeDriver</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════ SECTION 3: CSV FILE ══════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-number">3</div>
+    <div class="section-title">CSV File Structure</div>
+  </div>
+  <div class="section-body">
+
+    <p>Create a file called <strong>contacts.csv</strong> and place it in the same folder as the Python script. It must look exactly like this:</p>
+
+    <div class="file-box">
+      <div class="file-box-header">📄 contacts.csv</div>
+      <div class="file-box-body">
+phone<br>
+923001234567<br>
+923451234567<br>
+923331234567<br>
+923211234567<br>
+923001112233
+      </div>
+    </div>
+
+    <h3>Phone Number Rules</h3>
+    <ul>
+      <li>✅ Start with <strong>country code</strong> (no + sign needed)</li>
+      <li>✅ No spaces, dashes, brackets, or special characters</li>
+      <li>✅ One phone number per row</li>
+      <li>✅ Pakistan numbers: start with <strong>92</strong> followed by the 10-digit number</li>
+    </ul>
+
+    <table>
+      <tr><th>Country</th><th>Code</th><th>Example Format</th></tr>
+      <tr><td>Pakistan</td><td>92</td><td>923001234567</td></tr>
+      <tr><td>India</td><td>91</td><td>919876543210</td></tr>
+      <tr><td>UAE</td><td>971</td><td>971501234567</td></tr>
+      <tr><td>UK</td><td>44</td><td>447911123456</td></tr>
+      <tr><td>USA</td><td>1</td><td>12025551234</td></tr>
+    </table>
+
+    <div class="info-box warn">
+      <div class="icon">⚠️</div>
+      <p>The script automatically strips spaces, dashes, and + signs from numbers — but it's best to keep your CSV clean from the start.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ SECTION 4: MESSAGE CONFIGURATION ══════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-number">4</div>
+    <div class="section-title">Message Configuration</div>
+  </div>
+  <div class="section-body">
+    <p>Open <strong>whatsapp_bulk_sender.py</strong> in any text editor (Notepad, VS Code, etc.). Find this section near the top:</p>
+
+    <div class="code-block"><span class="comment"># ✏️  EDIT THIS — Your message</span>
+<span class="keyword">MESSAGE</span> = <span class="string">"""Salam. Badar here. I noticed something about your 
+clinic's online presence and had an idea that could 
+bring more patient inquiries. If you're open, I can share it."""</span></div>
+
+    <p>Replace the text inside the triple quotes with your own message. The triple quotes <code>"""</code> allow multi-line messages.</p>
+
+    <h3>Other Settings You Can Change</h3>
+    <table>
+      <tr><th>Variable</th><th>Default</th><th>What It Does</th></tr>
+      <tr><td><code>CSV_FILE</code></td><td>contacts.csv</td><td>Name of your CSV file</td></tr>
+      <tr><td><code>MAX_MESSAGES_PER_SESSION</code></td><td>50</td><td>Max messages to send in one run</td></tr>
+      <tr><td><code>MIN_DELAY_SECONDS</code></td><td>25</td><td>Minimum wait between messages</td></tr>
+      <tr><td><code>MAX_DELAY_SECONDS</code></td><td>60</td><td>Maximum wait between messages</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════ SECTION 5: RUNNING THE SCRIPT ══════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-number">5</div>
+    <div class="section-title">Running the Script — Step by Step</div>
+  </div>
+  <div class="section-body">
+
+    <h3>📁 File Setup</h3>
+    <p>Place these two files in the <strong>same folder</strong>:</p>
+    <div class="file-box">
+      <div class="file-box-header">📁 Your Project Folder</div>
+      <div class="file-box-body">
+📄 whatsapp_bulk_sender.py<br>
+📄 contacts.csv
+      </div>
+    </div>
+
+    <h3>▶️ Running the Script</h3>
+    <ol class="step-list">
+      <li>Open Terminal (Mac/Linux) or Command Prompt (Windows)</li>
+      <li>Navigate to your folder: <div class="code-block"><span class="cmd">cd path/to/your/folder</span>
+<span class="comment"># Example (Windows): cd C:\Users\Badar\Desktop\whatsapp</span>
+<span class="comment"># Example (Mac):     cd ~/Desktop/whatsapp</span></div></li>
+      <li>Run the script: <div class="code-block"><span class="cmd">python whatsapp_bulk_sender.py</span></div></li>
+      <li>A Chrome window will open with WhatsApp Web — scan the QR code with your phone</li>
+      <li>After scanning, the script starts sending automatically</li>
+    </ol>
+
+    <h3>👀 What You'll See in the Terminal</h3>
+    <div class="code-block">============================================================
+   📱  WhatsApp Bulk Sender — Starting Up
+============================================================
+   📄  CSV File     : contacts.csv
+   📝  Message      : Salam. Badar here...
+   ⏱️   Delay Range  : 25–60 seconds
+   🔢  Max Messages : 50
+============================================================
+
+✅ Loaded 5 valid phone numbers from 'contacts.csv'
+🔧 Setting up Chrome browser...
+✅ Chrome browser launched successfully.
+
+🌐 Opening WhatsApp Web...
+
+📱  SCAN THE QR CODE NOW IN YOUR CHROME WINDOW
+⏳  You have 45 seconds to scan
+
+✅ WhatsApp Web loaded. Starting to send messages...
+
+  📞 Processing: +923001234567 (1/5)
+  [10:32:15] ✅ (1/5) 923001234567 — SENT
+  ⏳ Waiting 38 seconds before next message...
+
+  📞 Processing: +923451234567 (2/5)
+  [10:33:01] ✅ (2/5) 923451234567 — SENT
+  ⏳ Waiting 52 seconds before next message...</div>
+
+    <div class="info-box tip">
+      <div class="icon">💡</div>
+      <p><strong>After first scan:</strong> The script saves your WhatsApp login in a <code>chrome_profile</code> folder. Next time you run it, you won't need to scan the QR code again!</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ SECTION 6: SENDING LOGIC ══════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-number">6</div>
+    <div class="section-title">How the Sending Logic Works</div>
+  </div>
+  <div class="section-body">
+    <p>For each phone number, the script builds a special WhatsApp Web URL that pre-fills the chat box with your message:</p>
+
+    <div class="code-block"><span class="comment"># The URL format:</span>
+https://web.whatsapp.com/send?phone=<span class="keyword">923001234567</span>&text=<span class="string">Your+message+here</span>
+
+<span class="comment"># Python builds this automatically:</span>
+encoded_msg = urllib.parse.quote(MESSAGE)
+url = f"https://web.whatsapp.com/send?phone={phone}&text={encoded_msg}"</div>
+
+    <p>Chrome opens this URL → WhatsApp Web loads the chat with the message pre-filled → Selenium finds the Send button → Clicks it → Waits a random delay → Moves to next number.</p>
+
+    <div class="info-box tip">
+      <div class="icon">💡</div>
+      <p>The message is URL-encoded (spaces become <code>+</code>, special characters are safely escaped) so it works correctly in the link.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ SECTION 7: SAFETY SETTINGS ══════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-number">7</div>
+    <div class="section-title">Safety Settings — Avoiding Account Restrictions</div>
+  </div>
+  <div class="section-body">
+
+    <p>WhatsApp monitors for unusual activity. These safety measures are built into the script:</p>
+
+    <table>
+      <tr><th>Safety Feature</th><th>Why It Matters</th></tr>
+      <tr>
+        <td><strong>Random delays (25–60 sec)</strong></td>
+        <td>Mimics human behavior. Fixed delays look robotic; random delays look natural.</td>
+      </tr>
+      <tr>
+        <td><strong>Session limit (50/day)</strong></td>
+        <td>Sending too many messages too fast triggers WhatsApp's spam detection.</td>
+      </tr>
+      <tr>
+        <td><strong>Auto-skip failed numbers</strong></td>
+        <td>If a chat fails to open, the script moves on instead of retrying repeatedly.</td>
+      </tr>
+      <tr>
+        <td><strong>Progress saved to files</strong></td>
+        <td>If the script is stopped, you know exactly which numbers were sent.</td>
+      </tr>
+    </table>
+
+    <div class="info-box warn">
+      <div class="icon">⚠️</div>
+      <p><strong>Recommended Daily Limits:</strong> Stay under 150–200 messages per day. Send to people who may recognize your number. Avoid sending to completely cold/unknown contacts in bulk — this is what gets accounts banned.</p>
+    </div>
+
+    <div class="info-box danger">
+      <div class="icon">🚫</div>
+      <p><strong>WhatsApp's Terms:</strong> Bulk messaging technically violates WhatsApp's Terms of Service. Use this tool responsibly — for people you have prior contact with. Anthropic does not endorse spamming.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ SECTION 8: OUTPUT FILES ══════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-number">8</div>
+    <div class="section-title">Output Files — Progress Tracking</div>
+  </div>
+  <div class="section-body">
+
+    <p>After each session, the script saves two log files in your project folder:</p>
+
+    <table>
+      <tr><th>File</th><th>Contents</th></tr>
+      <tr><td><strong>sent_20260309_103215.txt</strong></td><td>All numbers that were successfully messaged</td></tr>
+      <tr><td><strong>failed_20260309_103215.txt</strong></td><td>Numbers that failed (can retry next session)</td></tr>
+    </table>
+
+    <p>The timestamp in the filename (e.g., <code>20260309_103215</code>) ensures files from different sessions don't overwrite each other.</p>
+
+    <div class="info-box tip">
+      <div class="icon">💡</div>
+      <p>To retry failed numbers: rename <code>failed_TIMESTAMP.txt</code> to <code>contacts.csv</code> and add a <code>phone</code> header row at the top. Then run the script again.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ SECTION 9: TROUBLESHOOTING ══════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-number">9</div>
+    <div class="section-title">Troubleshooting — Common Problems & Fixes</div>
+  </div>
+  <div class="section-body">
+
+    <table class="error-row">
+      <tr>
+        <th>Problem</th>
+        <th>Cause</th>
+        <th>Fix</th>
+      </tr>
+      <tr>
+        <td>❌ ChromeDriver version mismatch</td>
+        <td>Old ChromeDriver cached</td>
+        <td class="fix">Run: <code>pip install --upgrade webdriver-manager</code> — it auto-fetches the correct version</td>
+      </tr>
+      <tr>
+        <td>❌ QR code not loading</td>
+        <td>Slow internet or WhatsApp server</td>
+        <td class="fix">Increase <code>QR_SCAN_WAIT = 90</code> in the script. Also try a different network.</td>
+      </tr>
+      <tr>
+        <td>❌ Message not sending</td>
+        <td>Send button not found</td>
+        <td class="fix">Increase <code>PAGE_LOAD_WAIT = 35</code>. WhatsApp Web may be loading slowly.</td>
+      </tr>
+      <tr>
+        <td>❌ Script stops unexpectedly</td>
+        <td>Chrome crashed or disconnected</td>
+        <td class="fix">Restart the script. Use the failed_*.txt to know where to resume.</td>
+      </tr>
+      <tr>
+        <td>❌ "Module not found" error</td>
+        <td>Libraries not installed</td>
+        <td class="fix">Run: <code>pip install selenium pandas webdriver-manager</code></td>
+      </tr>
+      <tr>
+        <td>❌ CSV column not found</td>
+        <td>Wrong column name</td>
+        <td class="fix">Make sure your CSV has a column named exactly <code>phone</code> (lowercase)</td>
+      </tr>
+      <tr>
+        <td>❌ WhatsApp asks to scan again</td>
+        <td>Chrome profile deleted</td>
+        <td class="fix">Don't delete the <code>chrome_profile</code> folder — it stores your login session</td>
+      </tr>
+      <tr>
+        <td>❌ "Invalid number" in WhatsApp</td>
+        <td>Wrong number format</td>
+        <td class="fix">Make sure numbers have country code, no +, no spaces. Pakistan: 923001234567</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════ SECTION 10: EXPECTED PERFORMANCE ══════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-number">10</div>
+    <div class="section-title">Expected Performance</div>
+  </div>
+  <div class="section-body">
+
+    <table>
+      <tr><th>Metric</th><th>Value</th></tr>
+      <tr><td>Safe daily limit</td><td>150–200 messages/day</td></tr>
+      <tr><td>Time per message</td><td>~30–65 seconds (with delay)</td></tr>
+      <tr><td>Time for 50 messages</td><td>~35–55 minutes</td></tr>
+      <tr><td>Time for 150 messages</td><td>~2–3 hours</td></tr>
+      <tr><td>Session limit (default)</td><td>50 messages</td></tr>
+    </table>
+
+    <div class="info-box warn">
+      <div class="icon">⚠️</div>
+      <p><strong>Why delays are essential:</strong> WhatsApp's systems analyze message frequency patterns. Sending 50 messages in 5 minutes is an obvious bot pattern. Sending 50 messages over 45 minutes with varying gaps looks human. The 25–60 second random delay is carefully chosen for this reason.</p>
+    </div>
+
+    <div class="info-box tip">
+      <div class="icon">💡</div>
+      <p><strong>Recommended Strategy:</strong> Run one session of 50 messages in the morning, one in the afternoon. Keep <code>MAX_MESSAGES_PER_SESSION = 50</code> and stay well under 150/day, especially with a newer WhatsApp account.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ QUICK REFERENCE ══════════════ -->
+<div class="section">
+  <div class="section-header">
+    <div class="section-number">★</div>
+    <div class="section-title">Quick Reference Checklist</div>
+  </div>
+  <div class="section-body">
+    <ol class="step-list">
+      <li>Install Python from python.org — check "Add to PATH"</li>
+      <li>Install Chrome from google.com/chrome</li>
+      <li>Run: <strong>pip install selenium pandas webdriver-manager</strong></li>
+      <li>Create <strong>contacts.csv</strong> with a <code>phone</code> column and your numbers (with country code)</li>
+      <li>Open <strong>whatsapp_bulk_sender.py</strong> and edit the <code>MESSAGE</code> variable</li>
+      <li>Navigate to the folder in terminal: <strong>cd path/to/folder</strong></li>
+      <li>Run: <strong>python whatsapp_bulk_sender.py</strong></li>
+      <li>Scan the QR code in Chrome with your phone</li>
+      <li>Watch the terminal — messages send automatically!</li>
+      <li>Check <strong>sent_*.txt</strong> and <strong>failed_*.txt</strong> for results</li>
+    </ol>
+  </div>
+</div>
+
+</div><!-- /container -->
+</body>
+</html>
