@@ -45,12 +45,134 @@ export type Workspace = {
   updated_at: Timestamp;
 };
 
+export type MemberPermissions = {
+  scrape?: boolean;
+  create_campaigns?: boolean;
+  connect_whatsapp?: boolean;
+  export?: boolean;
+  import?: boolean;
+  delete_leads?: boolean;
+  use_ai?: boolean;
+  max_numbers?: number;
+  daily_message_cap?: number | null;
+};
+
 export type WorkspaceMember = {
   workspace_id: UUID;
   user_id: UUID;
   role: Role;
+  active: boolean;
+  title: string | null;
+  permissions: MemberPermissions;
   created_at: Timestamp;
 };
+
+export type Team = {
+  id: UUID;
+  workspace_id: UUID;
+  name: string;
+  description: string | null;
+  color: string;
+  created_by: UUID | null;
+  created_at: Timestamp;
+};
+
+export type TeamMember = {
+  team_id: UUID;
+  workspace_id: UUID;
+  user_id: UUID;
+  added_at: Timestamp;
+};
+
+export type LeadList = {
+  id: UUID;
+  workspace_id: UUID;
+  name: string;
+  description: string | null;
+  color: string;
+  created_by: UUID | null;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+};
+
+export type LeadListItem = {
+  list_id: UUID;
+  workspace_id: UUID;
+  lead_id: UUID;
+  added_by: UUID | null;
+  added_at: Timestamp;
+};
+
+export type ResourceType = 'lead_list' | 'campaign' | 'automation' | 'template' | 'whatsapp_account';
+
+export type ResourceAccess = {
+  id: UUID;
+  workspace_id: UUID;
+  resource_type: ResourceType;
+  resource_id: UUID;
+  user_id: UUID | null;
+  team_id: UUID | null;
+  access: 'view' | 'manage';
+  granted_by: UUID | null;
+  created_at: Timestamp;
+};
+
+export type MemberReportRow = {
+  user_id: UUID;
+  full_name: string;
+  email: string;
+  role: Role;
+  active: boolean;
+  teams: string[];
+  messages_sent: number;
+  delivered: number;
+  read: number;
+  failed: number;
+  replies: number;
+  leads_contacted: number;
+  leads_replied: number;
+  leads_owned: number;
+  leads_added: number;
+  campaigns_created: number;
+  meetings: number;
+  won: number;
+  won_value: number;
+  numbers: number;
+  numbers_connected: number;
+  last_active_at: Timestamp | null;
+};
+
+export type TeamReportRow = {
+  team_id: UUID;
+  name: string;
+  color: string;
+  members: number;
+  messages_sent: number;
+  delivered: number;
+  read: number;
+  replies: number;
+  leads_contacted: number;
+  won: number;
+  won_value: number;
+};
+
+export type CampaignSenderRow = {
+  campaign_id: UUID;
+  campaign_name: string;
+  campaign_status: string;
+  user_id: UUID | null;
+  full_name: string | null;
+  account_id: UUID | null;
+  account_label: string | null;
+  messages_sent: number;
+  delivered: number;
+  read: number;
+  failed: number;
+  leads_contacted: number;
+  replied: number;
+};
+
+export type DailyReportRow = { day: string; user_id: UUID | null; sent: number; replies: number };
 
 export type WorkspaceInvite = {
   id: UUID;
@@ -241,6 +363,7 @@ export type WhatsappAccount = {
   paused_until: Timestamp | null;
   disconnect_count: number;
   last_disconnect_at: Timestamp | null;
+  limits: { new_chat_quota?: number; new_chat_used?: number; cycle_end?: string; timelock_until?: string | null; timelock_type?: string; checked_at?: string };
   created_at: Timestamp;
   updated_at: Timestamp;
 };
@@ -256,6 +379,7 @@ export type WhatsappLinkCode = {
 export type MessageTemplate = {
   id: UUID;
   workspace_id: UUID;
+  scope: 'workspace' | 'personal';
   name: string;
   category: string;
   body: string;
@@ -437,6 +561,7 @@ export type LeadFilters = {
   min_score?: number;
   not_in_active_campaign?: boolean;
   exclude_campaign_id?: UUID;
+  list_ids?: UUID[];
 };
 
 export type SavedView = {
@@ -540,6 +665,8 @@ export type AutomationConditions = {
 export type Automation = {
   id: UUID;
   workspace_id: UUID;
+  /** null = workspace-wide (optionally assigned to members/teams); set = personal to that member */
+  owner_id: UUID | null;
   name: string;
   enabled: boolean;
   trigger: AutomationTrigger;
@@ -693,6 +820,11 @@ export type Database = {
       campaign_events: TableDef<CampaignEvent, 'workspace_id' | 'campaign_id' | 'type'>;
       automations: TableDef<Automation, 'workspace_id' | 'name' | 'trigger'>;
       automation_runs: TableDef<AutomationRun, 'workspace_id' | 'automation_id' | 'status'>;
+      teams: TableDef<Team, 'workspace_id' | 'name'>;
+      team_members: TableDef<TeamMember, 'team_id' | 'workspace_id' | 'user_id'>;
+      lead_lists: TableDef<LeadList, 'workspace_id' | 'name'>;
+      lead_list_items: TableDef<LeadListItem, 'list_id' | 'workspace_id' | 'lead_id'>;
+      resource_access: TableDef<ResourceAccess, 'workspace_id' | 'resource_type' | 'resource_id'>;
       automation_queue: TableDef<
         { id: number; workspace_id: UUID; trigger: string; lead_id: UUID | null; payload: Record<string, unknown>; created_at: Timestamp; processed_at: Timestamp | null },
         'workspace_id' | 'trigger'
@@ -744,6 +876,11 @@ export type Database = {
       account_health: { Args: { p_workspace: string; p_days?: number }; Returns: AccountHealth[] };
       engine_acquire_lease: { Args: { p_instance: string; p_ttl_seconds?: number }; Returns: boolean };
       engine_release_lease: { Args: { p_instance: string }; Returns: undefined };
+      lead_list_add: { Args: { p_list: string; p_ids?: string[] | null; p_filters?: LeadFilters | null }; Returns: number };
+      report_members: { Args: { p_workspace: string; p_from: string; p_to: string }; Returns: MemberReportRow[] };
+      report_teams: { Args: { p_workspace: string; p_from: string; p_to: string }; Returns: TeamReportRow[] };
+      report_campaign_senders: { Args: { p_workspace: string; p_from: string; p_to: string; p_campaign?: string | null }; Returns: CampaignSenderRow[] };
+      report_daily: { Args: { p_workspace: string; p_from: string; p_to: string }; Returns: DailyReportRow[] };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
