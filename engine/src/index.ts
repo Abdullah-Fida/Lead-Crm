@@ -20,17 +20,19 @@ import { browserAvailable } from './scraper/browser';
 async function main() {
   log.info({ instance: config.instanceId, version: config.version }, 'BatSols engine starting');
 
-  let healthy = false;
+  // Health = "process is up". It must NOT wait for the lease: on a Render web
+  // service the old instance is only stopped (and releases the lease) once the
+  // new one reports healthy. Also the target for keep-alive pings.
+  let active = false;
   if (config.port) {
-    createServer((req, res) => {
-      const ok = req.url === '/health' ? healthy : true;
-      res.writeHead(ok ? 200 : 503, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ ok, instance: config.instanceId }));
+    createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, active, instance: config.instanceId }));
     }).listen(config.port, () => log.info({ port: config.port }, 'health endpoint listening'));
   }
 
   await acquireLease();
-  healthy = true;
+  active = true;
 
   const manager = new SessionManager({ onMessages: handleUpsert, onUpdates: handleUpdates, getMessage });
   const campaigns = new CampaignRunner(manager);
