@@ -25,6 +25,7 @@ export type WorkspaceSettings = {
   company_name?: string;
   currency?: string;
   scoring?: ScoringSettings;
+  members_see_all_leads?: boolean;
 };
 
 export type ScoringSettings = {
@@ -394,6 +395,7 @@ export type MessageTemplate = {
 export type CampaignAudience = {
   mode?: 'filters' | 'selection';
   filters?: LeadFilters;
+  options?: { skipActive?: boolean; skipContactedDays?: number | null; onlyVerified?: boolean };
   lead_count?: number;
 };
 
@@ -562,6 +564,7 @@ export type LeadFilters = {
   not_in_active_campaign?: boolean;
   exclude_campaign_id?: UUID;
   list_ids?: UUID[];
+  ids?: UUID[];
 };
 
 export type SavedView = {

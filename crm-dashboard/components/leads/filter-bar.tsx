@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Building2, Filter, MapPin, Search, SlidersHorizontal, Tag as TagIcon, Target, UserRound, X } from 'lucide-react';
+import { Building2, Filter, Flame, ListChecks, MapPin, Search, SlidersHorizontal, Tag as TagIcon, Target, UserRound, X } from 'lucide-react';
 import { LEAD_SOURCES, SOURCE_LABELS, type LeadFilters } from '@batsols/shared';
 import { WhatsAppIcon } from '@/components/brand';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Field, Input, NativeSelect } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/menu';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { useLeadFacets, useMembers, useStages } from '@/lib/queries';
+import { useLeadLists } from '@/lib/lists';
 
 export function countActiveFilters(f: LeadFilters) {
   return Object.entries(f).filter(([k, v]) => k !== 'q' && v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length) && !(k === 'unassigned' && !v)).length;
@@ -101,6 +102,18 @@ export function FilterBar({
           onChange={(v) => set({ owner_ids: v.filter((x) => x !== '__none'), unassigned: v.includes('__none') })}
         />
       )}
+      <MultiSelect
+        label="Quality"
+        icon={<Flame />}
+        options={[
+          { value: 'hot', label: 'Hot (70+)' },
+          { value: 'warm', label: 'Warm (40–69)' },
+          { value: 'cold', label: 'Cold (under 40)' },
+        ]}
+        value={filters.tiers ?? []}
+        onChange={(v) => set({ tiers: v as Array<'hot' | 'warm' | 'cold'> })}
+      />
+      <ListsFilter value={filters.list_ids ?? []} onChange={(v) => set({ list_ids: v })} />
       <MultiSelect
         label="WhatsApp"
         icon={<WhatsAppIcon />}
@@ -203,4 +216,10 @@ function MoreFilters({ filters, onChange }: { filters: LeadFilters; onChange: (f
       </PopoverContent>
     </Popover>
   );
+}
+
+function ListsFilter({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const { data = [] } = useLeadLists();
+  if (!data.length) return null;
+  return <MultiSelect label="List" icon={<ListChecks />} options={data.map((l) => ({ value: l.id, label: l.name, color: l.color, count: l.count }))} value={value} onChange={onChange} />;
 }

@@ -58,10 +58,20 @@ function useShellCounts() {
     },
     refetchInterval: 5 * 60_000,
   });
-  return { inbox: inbox.data ?? 0, tasks: tasks.data ?? 0 };
+  const chatKey = ['chat-channels', workspace.id];
+  const chat = useQuery({
+    queryKey: [...chatKey, 'unread'],
+    queryFn: async () => {
+      const { data } = await getSupabase().rpc('chat_overview', { p_workspace: workspace.id });
+      return ((data ?? []) as Array<{ unread: number }>).reduce((s, c) => s + c.unread, 0);
+    },
+    refetchInterval: 30_000,
+  });
+  useRealtime('chat_messages', `workspace_id=eq.${workspace.id}`, [[...chatKey, 'unread']]);
+  return { inbox: inbox.data ?? 0, tasks: tasks.data ?? 0, chat: chat.data ?? 0 };
 }
 
-function NavLink({ item, counts, waState, onNavigate }: { item: NavItem; counts: { inbox: number; tasks: number }; waState: 'ok' | 'warn' | 'none'; onNavigate?: () => void }) {
+function NavLink({ item, counts, waState, onNavigate }: { item: NavItem; counts: { inbox: number; tasks: number; chat: number }; waState: 'ok' | 'warn' | 'none'; onNavigate?: () => void }) {
   const pathname = usePathname();
   const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
   const badge = item.badge ? counts[item.badge] : 0;

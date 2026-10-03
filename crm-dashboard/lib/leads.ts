@@ -8,7 +8,7 @@ import { qk } from '@/lib/queries';
 import { useWorkspace } from '@/lib/workspace';
 import { errorMessage } from '@/lib/utils';
 
-export type SortKey = 'created_at' | 'business_name' | 'rating' | 'reviews_count' | 'last_contacted_at' | 'deal_value';
+export type SortKey = 'created_at' | 'business_name' | 'rating' | 'reviews_count' | 'last_contacted_at' | 'deal_value' | 'score';
 
 export interface LeadsQueryParams {
   filters: LeadFilters;

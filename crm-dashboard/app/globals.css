@@ -48,6 +48,14 @@
   --chart-4: #f59e0b;
   --chart-5: #ec4899;
   --grid: #ececf1;
+  /* Validated (dataviz validator): ordinal indigo ramp light->dark, categorical 3 */
+  --ord-1: #818cf8;
+  --ord-2: #6366f1;
+  --ord-3: #4338ca;
+  --ord-4: #312e81;
+  --cat-1: #2a78d6;
+  --cat-2: #eb6834;
+  --cat-3: #1baf7a;
 
   color-scheme: light;
 }
@@ -94,6 +102,13 @@
   --chart-4: #fbbf24;
   --chart-5: #f472b6;
   --grid: rgba(255, 255, 255, 0.06);
+  --ord-1: #4338ca;
+  --ord-2: #6366f1;
+  --ord-3: #818cf8;
+  --ord-4: #c7d2fe;
+  --cat-1: #3987e5;
+  --cat-2: #d95926;
+  --cat-3: #199e70;
 
   color-scheme: dark;
 }

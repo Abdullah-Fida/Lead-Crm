@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Download,
   Globe,
+  ListChecks,
   MapPin,
   MoreHorizontal,
   Plus,
@@ -45,11 +46,12 @@ import {
   Tooltip,
 } from '@/components/ui/menu';
 import { FilterBar } from './filter-bar';
+import { AddToListDialog } from '@/components/lists/lists-view';
 import { LeadDrawer } from './lead-drawer';
 import { LeadFormDialog } from './lead-form';
 import { ImportDialog } from './import-dialog';
 import { TagsDialog, VerifyDialog, useStartCampaignWith, type Selection } from './bulk-dialogs';
-import { LandlineBadge, OwnerSelect, PhoneText, Rating, StageDot, StageSelect, WaStatus } from './bits';
+import { LandlineBadge, OwnerSelect, PhoneText, Rating, ScoreBadge, StageDot, StageSelect, WaStatus } from './bits';
 import { useBulkAction, useLeadsList, useUpdateLead, type SortKey } from '@/lib/leads';
 import { exportLeadsCsv } from '@/lib/export';
 import { useMembers, useStages } from '@/lib/queries';
@@ -89,13 +91,15 @@ export function LeadsView() {
     if (job) f.scrape_job_id = job;
     const tag = params.get('tag');
     if (tag) f.tags = [tag];
+    const list = params.get('list');
+    if (list) f.list_ids = [list];
     return f;
   });
   const [sort, setSort] = React.useState<{ key: SortKey; asc: boolean }>({ key: 'created_at', asc: false });
   const [page, setPage] = React.useState(0);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [allMatching, setAllMatching] = React.useState(false);
-  const [dialog, setDialog] = React.useState<null | 'add-tags' | 'remove-tags' | 'verify' | 'import'>(null);
+  const [dialog, setDialog] = React.useState<null | 'add-tags' | 'remove-tags' | 'verify' | 'import' | 'add-list'>(null);
   const [exporting, setExporting] = React.useState(false);
 
   const leadId = params.get('lead');
@@ -243,6 +247,14 @@ export function LeadsView() {
       </div>
 
       <FilterBar filters={filters} onChange={setFilters} />
+      {filters.list_ids?.length ? (
+        <div className="ml-2 mt-3 inline-flex items-center gap-2 rounded-lg bg-primary-soft px-3 py-1.5 text-xs font-medium text-primary">
+          <ListChecks className="size-3.5" /> Showing one lead list
+          <button onClick={() => setFilters(({ list_ids: _drop, ...rest }) => rest)} aria-label="Clear">
+            <X className="size-3.5" />
+          </button>
+        </div>
+      ) : null}
       {filters.scrape_job_id && (
         <div className="mt-3 inline-flex items-center gap-2 rounded-lg bg-primary-soft px-3 py-1.5 text-xs font-medium text-primary">
           <MapPin className="size-3.5" /> Showing leads from one lead search
@@ -276,7 +288,7 @@ export function LeadsView() {
                 <Th className="w-10">
                   <Checkbox checked={allPageSelected ? true : somePageSelected ? 'indeterminate' : false} onCheckedChange={toggleAll} aria-label="Select page" />
                 </Th>
-                {sortHeader('business_name', 'Business')}
+                {sortHeader('score', 'Business · score')}
                 <Th>Phone</Th>
                 <Th>Location</Th>
                 <Th>Stage</Th>
@@ -381,6 +393,9 @@ export function LeadsView() {
                   <DropdownMenuItem onSelect={() => setDialog('remove-tags')}>
                     <TagIcon /> Remove tags
                   </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setDialog('add-list')}>
+                    <ListChecks /> Add to list
+                  </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setDialog('verify')}>
                     <ShieldCheck /> Verify WhatsApp numbers
                   </DropdownMenuItem>
@@ -420,6 +435,7 @@ export function LeadsView() {
         count={selectionCount}
         onApply={(tags) => runBulk(dialog === 'remove-tags' ? 'remove_tags' : 'add_tags', tags, dialog === 'remove-tags' ? 'Removed tags from' : 'Tagged')}
       />
+      <AddToListDialog open={dialog === 'add-list'} onOpenChange={(o) => !o && setDialog(null)} ids={selection.ids} filters={selection.filters} count={selectionCount} />
       <VerifyDialog open={dialog === 'verify'} onOpenChange={(o) => !o && setDialog(null)} selection={selection} />
     </Page>
   );
@@ -502,6 +518,7 @@ const LeadRow = React.memo(function LeadRow({
           <Avatar name={lead.business_name} size="md" square />
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
+              <ScoreBadge score={lead.score} tier={lead.score_tier} />
               <span className="truncate font-medium text-foreground">{lead.business_name}</span>
               {lead.opted_out && (
                 <Tooltip content="Opted out">

@@ -180,3 +180,12 @@ export function LandlineBadge() {
     </Tooltip>
   );
 }
+
+export function ScoreBadge({ score, tier }: { score: number; tier: 'hot' | 'warm' | 'cold' }) {
+  const cls = tier === 'hot' ? 'bg-danger-soft text-danger' : tier === 'warm' ? 'bg-warning-soft text-warning' : 'bg-surface-2 text-subtle';
+  return (
+    <Tooltip content={`Lead score ${score}/100 · ${tier === 'hot' ? 'Hot' : tier === 'warm' ? 'Warm' : 'Cold'}`}>
+      <span className={cn('inline-flex h-[18px] min-w-[26px] shrink-0 items-center justify-center rounded px-1 text-[10.5px] font-semibold tabular', cls)}>{score}</span>
+    </Tooltip>
+  );
+}

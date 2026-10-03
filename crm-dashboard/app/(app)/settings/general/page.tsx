@@ -136,6 +136,13 @@ export default function GeneralSettingsPage() {
             disabled={disabled}
           />
           <SwitchRow
+            label="Members see every lead"
+            description="Off (recommended for agencies): each member works in their own space and only sees their own leads plus lists, campaigns and numbers shared with them. On: everyone sees all leads."
+            checked={Boolean((form.settings as { members_see_all_leads?: boolean }).members_see_all_leads)}
+            onCheckedChange={(v) => setForm((f) => ({ ...f, settings: { ...f.settings, members_see_all_leads: v } as typeof f.settings }))}
+            disabled={disabled}
+          />
+          <SwitchRow
             label="Capture chats from unknown numbers"
             description="Off: only replies from existing leads appear in the inbox, so teammates’ personal chats stay private. On: every incoming chat becomes a lead."
             checked={form.settings.capture_unknown_inbound}

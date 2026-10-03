@@ -3,25 +3,50 @@
 import * as React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, Link2, LogOut, MoreHorizontal, Smartphone, Trash2, UserMinus, UserPlus } from 'lucide-react';
+import { Ban, Copy, KeyRound, Link2, LogOut, MoreHorizontal, Plus, ShieldCheck, Smartphone, Trash2, UserCheck, UserMinus, UserPlus, Users } from 'lucide-react';
 import { toast } from 'sonner';
-import { ROLE_DESCRIPTIONS, ROLE_LABELS, type Role, type WorkspaceInvite } from '@batsols/shared';
+import { ROLE_DESCRIPTIONS, ROLE_LABELS, STAGE_COLORS, type MemberPermissions, type Role, type WorkspaceInvite, type WorkspaceMember } from '@batsols/shared';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader } from '@/components/ui/card';
+import { Checkbox, SwitchRow } from '@/components/ui/controls';
 import { Dialog, DialogBody, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { Callout, useConfirm } from '@/components/ui/feedback';
 import { Field, Input, NativeSelect } from '@/components/ui/input';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/menu';
 import { Table, Td, Th, Tr } from '@/components/ui/layout';
 import { getSupabase } from '@/lib/supabase/client';
+import { useTeams } from '@/lib/access';
 import { qk, useAccounts, useMembers, type Member } from '@/lib/queries';
 import { useWorkspace } from '@/lib/workspace';
-import { errorMessage, timeAgo } from '@/lib/utils';
+import { cn, errorMessage, timeAgo } from '@/lib/utils';
 import { APP_URL } from '@/lib/env';
 
 const inviteUrl = (token: string) => `${APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/invite/${token}`;
+
+type MemberRow = Member & Pick<WorkspaceMember, 'active' | 'title' | 'permissions'>;
+
+function useMemberRows() {
+  const { workspace } = useWorkspace();
+  return useQuery({
+    queryKey: ['member-rows', workspace.id],
+    queryFn: async () => {
+      const { data, error } = await getSupabase().from('workspace_members').select('user_id, role, created_at, active, title, permissions, profile:profiles(*)').eq('workspace_id', workspace.id).order('created_at');
+      if (error) throw error;
+      return data as unknown as MemberRow[];
+    },
+  });
+}
+
+const PERMS: Array<{ key: keyof MemberPermissions; label: string; description: string; def: boolean }> = [
+  { key: 'connect_whatsapp', label: 'Connect WhatsApp numbers', description: 'Link their own numbers', def: true },
+  { key: 'create_campaigns', label: 'Create campaigns', description: 'Start their own campaigns', def: true },
+  { key: 'scrape', label: 'Use the lead finder', description: 'Run Google Maps searches', def: true },
+  { key: 'import', label: 'Import leads', description: 'Upload CSV files', def: true },
+  { key: 'export', label: 'Export leads', description: 'Download lead CSVs', def: true },
+  { key: 'delete_leads', label: 'Delete leads', description: 'Delete leads they own', def: false },
+];
 
 export default function TeamSettingsPage() {
   return (
@@ -33,55 +58,50 @@ export default function TeamSettingsPage() {
 
 function TeamSettings() {
   const { workspace, userId, can, role: myRole } = useWorkspace();
-  const { members, isLoading } = useMembers();
+  const rows = useMemberRows();
   const { accounts } = useAccounts();
+  const { teams, teamsOf } = useTeams();
   const qc = useQueryClient();
   const confirm = useConfirm();
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const inviteOpen = params.get('invite') === '1';
-  const setInviteOpen = (o: boolean) => router.replace(o ? `${pathname}?invite=1` : pathname, { scroll: false });
+  const [inviteOpen, setInviteOpen] = React.useState(params.get('invite') === '1');
+  const [addOpen, setAddOpen] = React.useState(false);
+  const [perms, setPerms] = React.useState<MemberRow | null>(null);
+  React.useEffect(() => {
+    if (params.get('invite') === '1') {
+      setAddOpen(true);
+      router.replace(pathname, { scroll: false });
+    }
+  }, [params, pathname, router]);
 
   const invites = useQuery({
     queryKey: ['invites', workspace.id],
     enabled: can.admin,
     queryFn: async () => {
-      const { data, error } = await getSupabase()
-        .from('workspace_invites')
-        .select('*')
-        .eq('workspace_id', workspace.id)
-        .is('accepted_at', null)
-        .order('created_at', { ascending: false });
+      const { data, error } = await getSupabase().from('workspace_invites').select('*').eq('workspace_id', workspace.id).is('accepted_at', null).order('created_at', { ascending: false });
       if (error) throw error;
       return data as WorkspaceInvite[];
     },
   });
-
   const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['member-rows', workspace.id] });
     qc.invalidateQueries({ queryKey: qk.members(workspace.id) });
     qc.invalidateQueries({ queryKey: ['invites', workspace.id] });
+    qc.invalidateQueries({ queryKey: ['teams', workspace.id] });
   };
 
-  async function changeRole(m: Member, role: Role) {
-    const { error } = await getSupabase().from('workspace_members').update({ role }).eq('workspace_id', workspace.id).eq('user_id', m.user_id);
+  const update = async (m: MemberRow, patch: Partial<WorkspaceMember>, msg: string) => {
+    const { error } = await getSupabase().from('workspace_members').update(patch).eq('workspace_id', workspace.id).eq('user_id', m.user_id);
     if (error) return toast.error(errorMessage(error));
-    toast.success(`${m.profile.full_name || m.profile.email} is now ${ROLE_LABELS[role]}`);
+    toast.success(msg);
     refresh();
-    if (m.user_id === userId) router.refresh();
-  }
+  };
 
-  async function remove(m: Member) {
+  async function remove(m: MemberRow) {
     const self = m.user_id === userId;
-    const ok = await confirm({
-      title: self ? `Leave ${workspace.name}?` : `Remove ${m.profile.full_name || m.profile.email}?`,
-      description: self
-        ? 'You will lose access to this workspace until someone invites you again.'
-        : 'They lose access immediately. Their leads stay in the workspace; their WhatsApp numbers stop sending until reassigned or removed.',
-      confirmLabel: self ? 'Leave' : 'Remove',
-      danger: true,
-    });
-    if (!ok) return;
+    if (!(await confirm({ title: self ? `Leave ${workspace.name}?` : `Remove ${m.profile.full_name || m.profile.email}?`, description: self ? 'You lose access until invited again.' : 'They lose access immediately. Their leads and history stay. Their personal WhatsApp numbers stop sending.', confirmLabel: self ? 'Leave' : 'Remove', danger: true }))) return;
     const { error } = await getSupabase().from('workspace_members').delete().eq('workspace_id', workspace.id).eq('user_id', m.user_id);
     if (error) return toast.error(errorMessage(error));
     if (self) {
@@ -89,13 +109,6 @@ function TeamSettings() {
       router.refresh();
       return;
     }
-    toast.success('Member removed');
-    refresh();
-  }
-
-  async function revoke(inv: WorkspaceInvite) {
-    const { error } = await getSupabase().from('workspace_invites').delete().eq('id', inv.id);
-    if (error) return toast.error(errorMessage(error));
     refresh();
   }
 
@@ -106,54 +119,56 @@ function TeamSettings() {
       <Card>
         <CardHeader
           title="Members"
-          description={`${members.length} ${members.length === 1 ? 'person' : 'people'} in ${workspace.name}`}
+          description="Each member gets their own space: their WhatsApp numbers, campaigns and leads — plus whatever you share with them."
           action={
             can.admin && (
-              <Button variant="primary" size="sm" onClick={() => setInviteOpen(true)}>
-                <UserPlus /> Invite
-              </Button>
+              <>
+                <Button variant="secondary" size="sm" onClick={() => setInviteOpen(true)}>
+                  <Link2 /> Invite link
+                </Button>
+                <Button variant="primary" size="sm" onClick={() => setAddOpen(true)}>
+                  <UserPlus /> Add member
+                </Button>
+              </>
             )
           }
         />
         <div className="overflow-x-auto">
-          <Table>
+          <Table className="min-w-[820px]">
             <thead>
               <tr>
                 <Th>Member</Th>
                 <Th>Role</Th>
+                <Th>Teams</Th>
                 <Th>WhatsApp</Th>
                 <Th>Joined</Th>
                 <Th className="w-12" />
               </tr>
             </thead>
             <tbody>
-              {isLoading && (
-                <tr>
-                  <Td colSpan={5} className="text-muted">
-                    Loading…
-                  </Td>
-                </tr>
-              )}
-              {members.map((m) => {
+              {(rows.data ?? []).map((m) => {
                 const nums = accounts.filter((a) => a.owner_id === m.user_id);
-                const online = nums.filter((a) => a.status === 'connected').length;
                 const editable = can.admin && (m.role !== 'owner' || myRole === 'owner');
                 return (
-                  <Tr key={m.user_id}>
+                  <Tr key={m.user_id} className={cn(!m.active && 'opacity-60')}>
                     <Td>
                       <div className="flex items-center gap-3">
                         <Avatar name={m.profile.full_name || m.profile.email} src={m.profile.avatar_url} />
                         <div className="min-w-0">
-                          <div className="truncate font-medium">
+                          <div className="flex items-center gap-2 truncate font-medium">
                             {m.profile.full_name || '—'} {m.user_id === userId && <span className="text-xs font-normal text-subtle">(you)</span>}
+                            {!m.active && <Badge tone="warning">Suspended</Badge>}
                           </div>
-                          <div className="truncate text-xs text-muted">{m.profile.email}</div>
+                          <div className="truncate text-xs text-muted">
+                            {m.title ? `${m.title} · ` : ''}
+                            {m.profile.email}
+                          </div>
                         </div>
                       </div>
                     </Td>
                     <Td>
                       {editable && m.user_id !== userId ? (
-                        <NativeSelect inputSize="sm" className="w-32" value={m.role} onChange={(e) => changeRole(m, e.target.value as Role)}>
+                        <NativeSelect inputSize="sm" className="w-28" value={m.role} onChange={(e) => update(m, { role: e.target.value as Role }, 'Role updated')}>
                           {roleOptions.map((r) => (
                             <option key={r} value={r}>
                               {ROLE_LABELS[r]}
@@ -165,14 +180,19 @@ function TeamSettings() {
                       )}
                     </Td>
                     <Td>
-                      {nums.length ? (
-                        <span className="inline-flex items-center gap-1.5 text-[13px]">
-                          <Smartphone className="size-3.5 text-subtle" />
-                          {online}/{nums.length} connected
-                        </span>
-                      ) : (
-                        <span className="text-[13px] text-subtle">None</span>
-                      )}
+                      <div className="flex flex-wrap gap-1">
+                        {teamsOf(m.user_id).map((t) => (
+                          <span key={t.id} className="inline-flex items-center gap-1 rounded bg-surface-2 px-1.5 py-0.5 text-[11.5px]">
+                            <span className="size-1.5 rounded-full" style={{ background: t.color }} /> {t.name}
+                          </span>
+                        ))}
+                      </div>
+                    </Td>
+                    <Td className="text-[13px] text-muted">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Smartphone className="size-3.5" />
+                        {nums.filter((a) => a.status === 'connected').length}/{nums.length}
+                      </span>
                     </Td>
                     <Td className="text-[13px] text-muted">{timeAgo(m.created_at)}</Td>
                     <Td>
@@ -183,16 +203,21 @@ function TeamSettings() {
                               <MoreHorizontal />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent>
-                            {m.user_id === userId ? (
-                              <DropdownMenuItem danger onSelect={() => remove(m)}>
-                                <LogOut /> Leave workspace
-                              </DropdownMenuItem>
-                            ) : (
-                              <DropdownMenuItem danger onSelect={() => remove(m)}>
-                                <UserMinus /> Remove from workspace
+                          <DropdownMenuContent className="w-56">
+                            {editable && m.role === 'member' && (
+                              <DropdownMenuItem onSelect={() => setPerms(m)}>
+                                <ShieldCheck /> Permissions & limits
                               </DropdownMenuItem>
                             )}
+                            {editable && m.user_id !== userId && m.role !== 'owner' && (
+                              <DropdownMenuItem onSelect={() => update(m, { active: !m.active }, m.active ? 'Member suspended' : 'Member reactivated')}>
+                                {m.active ? <Ban /> : <UserCheck />} {m.active ? 'Suspend access' : 'Reactivate'}
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem danger onSelect={() => remove(m)}>
+                              {m.user_id === userId ? <LogOut /> : <UserMinus />} {m.user_id === userId ? 'Leave workspace' : 'Remove from workspace'}
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       )}
@@ -205,40 +230,30 @@ function TeamSettings() {
         </div>
       </Card>
 
+      <TeamsCard members={rows.data ?? []} />
+
       {can.admin && (
         <Card>
-          <CardHeader title="Pending invites" description="Links expire after 7 days and work once." />
+          <CardHeader title="Pending invite links" description="Links expire after 7 days and work once." />
           {invites.data?.length ? (
             <ul className="divide-y divide-border border-t border-border">
-              {invites.data.map((inv) => {
-                const expired = new Date(inv.expires_at) < new Date();
-                return (
-                  <li key={inv.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
-                    <Link2 className="size-4 text-subtle" />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[13px] font-medium">{inv.email ?? 'Anyone with the link'}</div>
-                      <div className="text-xs text-muted">
-                        {ROLE_LABELS[inv.role]} · {expired ? <span className="text-danger">expired</span> : `expires ${timeAgo(inv.expires_at)}`}
-                      </div>
+              {invites.data.map((inv) => (
+                <li key={inv.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
+                  <Link2 className="size-4 text-subtle" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-medium">{inv.email ?? 'Anyone with the link'}</div>
+                    <div className="text-xs text-muted">
+                      {ROLE_LABELS[inv.role]} · expires {timeAgo(inv.expires_at)}
                     </div>
-                    {!expired && (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          void navigator.clipboard.writeText(inviteUrl(inv.token));
-                          toast.success('Invite link copied');
-                        }}
-                      >
-                        <Copy /> Copy link
-                      </Button>
-                    )}
-                    <Button size="icon-sm" variant="ghost" onClick={() => revoke(inv)} aria-label="Revoke invite">
-                      <Trash2 />
-                    </Button>
-                  </li>
-                );
-              })}
+                  </div>
+                  <Button size="sm" variant="secondary" onClick={() => { void navigator.clipboard.writeText(inviteUrl(inv.token)); toast.success('Invite link copied'); }}>
+                    <Copy /> Copy link
+                  </Button>
+                  <Button size="icon-sm" variant="ghost" onClick={async () => { await getSupabase().from('workspace_invites').delete().eq('id', inv.id); refresh(); }} aria-label="Revoke invite">
+                    <Trash2 />
+                  </Button>
+                </li>
+              ))}
             </ul>
           ) : (
             <div className="border-t border-border px-5 py-6 text-[13px] text-muted">No pending invites.</div>
@@ -258,68 +273,52 @@ function TeamSettings() {
         </ul>
       </Card>
 
+      <AddMemberDialog open={addOpen} onOpenChange={setAddOpen} onDone={refresh} teams={teams} />
       <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} onCreated={refresh} />
+      <PermissionsDialog member={perms} onClose={() => setPerms(null)} onSave={(p, title) => perms && update(perms, { permissions: p, title }, 'Permissions saved').then(() => setPerms(null))} />
     </div>
   );
 }
 
-function InviteDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (o: boolean) => void; onCreated: () => void }) {
-  const { workspace, userId, can } = useWorkspace();
-  const [email, setEmail] = React.useState('');
-  const [role, setRole] = React.useState<Exclude<Role, 'owner'>>('member');
-  const [link, setLink] = React.useState<string | null>(null);
+function AddMemberDialog({ open, onOpenChange, onDone, teams }: { open: boolean; onOpenChange: (o: boolean) => void; onDone: () => void; teams: ReturnType<typeof useTeams>['teams'] }) {
+  const { workspace } = useWorkspace();
+  const [form, setForm] = React.useState({ full_name: '', email: '', password: '', role: 'member' as Exclude<Role, 'owner'>, title: '', team_ids: [] as string[] });
   const [busy, setBusy] = React.useState(false);
-
+  const [result, setResult] = React.useState<{ email: string; password: string | null } | null>(null);
   React.useEffect(() => {
     if (open) {
-      setEmail('');
-      setRole('member');
-      setLink(null);
+      setForm({ full_name: '', email: '', password: '', role: 'member', title: '', team_ids: [] });
+      setResult(null);
     }
   }, [open]);
-
-  async function create() {
+  async function submit() {
     setBusy(true);
-    const { data, error } = await getSupabase()
-      .from('workspace_invites')
-      .insert({ workspace_id: workspace.id, email: email.trim().toLowerCase() || null, role, invited_by: userId })
-      .select('token')
-      .single();
+    const res = await fetch('/api/team/members', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspace_id: workspace.id, ...form, password: form.password || undefined, title: form.title || undefined }),
+    });
+    const body = (await res.json().catch(() => ({}))) as { error?: string; password?: string | null };
     setBusy(false);
-    if (error) return toast.error(errorMessage(error));
-    const url = inviteUrl(data.token);
-    setLink(url);
-    void navigator.clipboard?.writeText(url).catch(() => undefined);
-    onCreated();
+    if (!res.ok) return toast.error(body.error ?? 'Could not add member');
+    setResult({ email: form.email, password: body.password ?? null });
+    onDone();
   }
-
-  if (!can.admin) return null;
-
+  const loginText = result ? `BatSols login\n${typeof window !== 'undefined' ? window.location.origin : ''}/login\nEmail: ${result.email}${result.password ? `\nPassword: ${result.password}` : ''}` : '';
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="md" title="Invite a teammate" description="They’ll create a password and can then connect their own WhatsApp.">
-        {link ? (
+      <DialogContent size="md" title="Add a team member" description="They get their own space to connect WhatsApp and run campaigns.">
+        {result ? (
           <>
-            <DialogBody className="space-y-4">
-              <Callout tone="success" title="Invite link created and copied">
-                Send it to your teammate on WhatsApp, Slack or email. It works once and expires in 7 days.
+            <DialogBody className="space-y-3">
+              <Callout tone="success" title="Member added">
+                {result.password ? 'Share these login details with them. They can change the password in their profile.' : 'They already had a BatSols account and can sign in with it.'}
               </Callout>
-              <div className="flex gap-2">
-                <Input readOnly value={link} onFocus={(e) => e.target.select()} className="font-mono text-xs" />
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(link);
-                    toast.success('Copied');
-                  }}
-                >
-                  <Copy /> Copy
-                </Button>
-              </div>
+              <pre className="rounded-lg bg-surface-2 p-3 font-mono text-[12.5px]">{loginText}</pre>
             </DialogBody>
             <DialogFooter>
-              <Button variant="ghost" onClick={() => setLink(null)}>
-                Invite another
+              <Button variant="secondary" onClick={() => { void navigator.clipboard.writeText(loginText); toast.success('Copied'); }}>
+                <Copy /> Copy details
               </Button>
               <Button variant="primary" onClick={() => onOpenChange(false)}>
                 Done
@@ -328,30 +327,47 @@ function InviteDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpen
           </>
         ) : (
           <>
-            <DialogBody className="space-y-4">
-              <Field label="Email" optional hint="Lock the link to one email address. Leave empty for a link anyone can use once.">
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="teammate@company.com" />
+            <DialogBody className="grid gap-4 sm:grid-cols-2">
+              <Field label="Full name">
+                <Input autoFocus value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="Ali Raza" />
+              </Field>
+              <Field label="Job title" optional>
+                <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Sales executive" />
+              </Field>
+              <Field label="Email" className="sm:col-span-2">
+                <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="ali@company.com" />
+              </Field>
+              <Field label="Password" hint="Leave empty to generate one" optional>
+                <Input type="text" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} leading={<KeyRound />} />
               </Field>
               <Field label="Role">
-                <div className="grid gap-2">
-                  {(['admin', 'member', 'viewer'] as const).map((r) => (
-                    <label key={r} className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 has-[:checked]:border-primary has-[:checked]:bg-primary-soft">
-                      <input type="radio" name="role" className="mt-1 accent-[var(--primary)]" checked={role === r} onChange={() => setRole(r)} />
-                      <div>
-                        <div className="text-[13px] font-medium">{ROLE_LABELS[r]}</div>
-                        <div className="text-xs text-muted">{ROLE_DESCRIPTIONS[r]}</div>
-                      </div>
-                    </label>
+                <NativeSelect value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Exclude<Role, 'owner'> })}>
+                  {(['member', 'admin', 'viewer'] as const).map((r) => (
+                    <option key={r} value={r}>
+                      {ROLE_LABELS[r]} — {ROLE_DESCRIPTIONS[r]}
+                    </option>
                   ))}
-                </div>
+                </NativeSelect>
               </Field>
+              {teams.length > 0 && (
+                <Field label="Teams" className="sm:col-span-2">
+                  <div className="flex flex-wrap gap-2">
+                    {teams.map((t) => (
+                      <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 text-[13px]">
+                        <Checkbox checked={form.team_ids.includes(t.id)} onCheckedChange={(c) => setForm({ ...form, team_ids: c ? [...form.team_ids, t.id] : form.team_ids.filter((x) => x !== t.id) })} />
+                        <span className="size-2 rounded-full" style={{ background: t.color }} /> {t.name}
+                      </label>
+                    ))}
+                  </div>
+                </Field>
+              )}
             </DialogBody>
             <DialogFooter>
               <Button variant="ghost" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button variant="primary" onClick={create} loading={busy}>
-                <Link2 /> Create invite link
+              <Button variant="primary" onClick={submit} loading={busy} disabled={!form.full_name.trim() || !form.email.trim() || (!!form.password && form.password.length < 8)}>
+                <UserPlus /> Add member
               </Button>
             </DialogFooter>
           </>
@@ -361,4 +377,182 @@ function InviteDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpen
   );
 }
 
-export { DropdownMenuLabel, DropdownMenuSeparator };
+function PermissionsDialog({ member, onClose, onSave }: { member: MemberRow | null; onClose: () => void; onSave: (p: MemberPermissions, title: string | null) => void }) {
+  const [p, setP] = React.useState<MemberPermissions>({});
+  const [title, setTitle] = React.useState('');
+  React.useEffect(() => {
+    if (member) {
+      setP(member.permissions ?? {});
+      setTitle(member.title ?? '');
+    }
+  }, [member]);
+  return (
+    <Dialog open={!!member} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent size="md" title="Permissions & limits" description={member?.profile.full_name}>
+        <DialogBody className="space-y-4">
+          <Field label="Job title" optional>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+          </Field>
+          <div className="divide-y divide-border rounded-xl border border-border px-4">
+            {PERMS.map((x) => (
+              <SwitchRow key={x.key} label={x.label} description={x.description} checked={(p[x.key] as boolean | undefined) ?? x.def} onCheckedChange={(v) => setP({ ...p, [x.key]: v })} />
+            ))}
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Max WhatsApp numbers">
+              <Input type="number" min={0} max={20} value={p.max_numbers ?? 3} onChange={(e) => setP({ ...p, max_numbers: Number(e.target.value) })} />
+            </Field>
+            <Field label="Daily message cap" hint="Across all their numbers. Empty = no cap.">
+              <Input type="number" min={1} value={p.daily_message_cap ?? ''} onChange={(e) => setP({ ...p, daily_message_cap: e.target.value ? Number(e.target.value) : null })} />
+            </Field>
+          </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={() => onSave(p, title.trim() || null)}>
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TeamsCard({ members }: { members: MemberRow[] }) {
+  const { workspace, userId, can } = useWorkspace();
+  const { teams, membersOf } = useTeams();
+  const qc = useQueryClient();
+  const confirm = useConfirm();
+  const [name, setName] = React.useState('');
+  const refresh = () => qc.invalidateQueries({ queryKey: ['teams', workspace.id] });
+  async function create() {
+    if (!name.trim()) return;
+    const { error } = await getSupabase().from('teams').insert({ workspace_id: workspace.id, name: name.trim(), color: STAGE_COLORS[teams.length % STAGE_COLORS.length], created_by: userId });
+    if (error) return toast.error(errorMessage(error).includes('teams_name_uq') ? 'A team with that name exists' : errorMessage(error));
+    setName('');
+    refresh();
+  }
+  async function toggle(teamId: string, uid: string, on: boolean) {
+    const sb = getSupabase();
+    const { error } = on ? await sb.from('team_members').insert({ team_id: teamId, workspace_id: workspace.id, user_id: uid }) : await sb.from('team_members').delete().eq('team_id', teamId).eq('user_id', uid);
+    if (error) return toast.error(errorMessage(error));
+    refresh();
+  }
+  return (
+    <Card>
+      <CardHeader title="Teams" description="Group members (e.g. “Sales Lahore”) to share lists, campaigns and automations with everyone in a team, and to compare teams in Reports." />
+      <div className="space-y-3 border-t border-border p-5">
+        {teams.map((t) => {
+          const ids = membersOf(t.id);
+          return (
+            <div key={t.id} className="rounded-xl border border-border p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="size-2.5 rounded-full" style={{ background: t.color }} />
+                <span className="text-[14px] font-semibold">{t.name}</span>
+                <span className="text-xs text-subtle">
+                  <Users className="mr-1 inline size-3" />
+                  {ids.length}
+                </span>
+                {can.admin && (
+                  <Button size="icon-xs" variant="ghost" className="ml-auto" onClick={async () => { if (await confirm({ title: `Delete team “${t.name}”?`, confirmLabel: 'Delete', danger: true })) { await getSupabase().from('teams').delete().eq('id', t.id); refresh(); } }} aria-label="Delete team">
+                    <Trash2 />
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {members.map((m) => {
+                  const on = ids.includes(m.user_id);
+                  return (
+                    <button
+                      key={m.user_id}
+                      disabled={!can.admin}
+                      onClick={() => toggle(t.id, m.user_id, !on)}
+                      className={cn('inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2.5 text-xs transition-colors', on ? 'border-primary bg-primary-soft text-primary' : 'border-border text-muted hover:text-foreground')}
+                    >
+                      <Avatar name={m.profile.full_name || m.profile.email} size="xs" /> {m.profile.full_name.split(' ')[0] || m.profile.email}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+        {can.admin && (
+          <div className="flex gap-2">
+            <Input inputSize="sm" placeholder="New team name…" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && create()} className="max-w-xs" />
+            <Button size="sm" variant="secondary" onClick={create} disabled={!name.trim()}>
+              <Plus /> Create team
+            </Button>
+          </div>
+        )}
+        {!teams.length && !can.admin && <p className="text-[13px] text-muted">No teams yet.</p>}
+      </div>
+    </Card>
+  );
+}
+
+function InviteDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (o: boolean) => void; onCreated: () => void }) {
+  const { workspace, userId, can } = useWorkspace();
+  const [email, setEmail] = React.useState('');
+  const [role, setRole] = React.useState<Exclude<Role, 'owner'>>('member');
+  const [link, setLink] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (open) {
+      setEmail('');
+      setRole('member');
+      setLink(null);
+    }
+  }, [open]);
+  async function create() {
+    const { data, error } = await getSupabase().from('workspace_invites').insert({ workspace_id: workspace.id, email: email.trim().toLowerCase() || null, role, invited_by: userId }).select('token').single();
+    if (error) return toast.error(errorMessage(error));
+    const url = inviteUrl(data.token);
+    setLink(url);
+    void navigator.clipboard?.writeText(url).catch(() => undefined);
+    onCreated();
+  }
+  if (!can.admin) return null;
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent size="md" title="Create an invite link" description="They choose their own password when they open it.">
+        {link ? (
+          <>
+            <DialogBody className="space-y-3">
+              <Callout tone="success" title="Link created and copied">Send it on WhatsApp, Slack or email. It works once and expires in 7 days.</Callout>
+              <Input readOnly value={link} onFocus={(e) => e.target.select()} className="font-mono text-xs" />
+            </DialogBody>
+            <DialogFooter>
+              <Button variant="primary" onClick={() => onOpenChange(false)}>
+                Done
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogBody className="space-y-4">
+              <Field label="Email" optional hint="Lock the link to one address, or leave empty.">
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              </Field>
+              <Field label="Role">
+                <NativeSelect value={role} onChange={(e) => setRole(e.target.value as Exclude<Role, 'owner'>)}>
+                  {(['member', 'admin', 'viewer'] as const).map((r) => (
+                    <option key={r} value={r}>
+                      {ROLE_LABELS[r]}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Field>
+            </DialogBody>
+            <DialogFooter>
+              <Button variant="primary" onClick={create}>
+                <Link2 /> Create link
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
