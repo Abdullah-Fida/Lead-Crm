@@ -92,8 +92,8 @@ export function DashboardView() {
 
       {remaining > 0 && (
         <Card className="mb-5 overflow-hidden">
-          <div className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center">
-            <div className="flex items-center gap-3 lg:w-64">
+          <div className="flex flex-col gap-4 p-5 2xl:flex-row 2xl:items-center">
+            <div className="flex shrink-0 items-center gap-3 2xl:w-52">
               <span className="flex size-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
                 <Sparkles className="size-5" />
               </span>
@@ -106,7 +106,7 @@ export function DashboardView() {
               {checklist.map((c) => (
                 <Link key={c.label} href={c.href} className={cn('flex items-center gap-2 rounded-lg border px-3 py-2.5 text-[13px] transition-colors', c.done ? 'border-transparent bg-success-soft/50 text-muted line-through' : 'border-border hover:border-primary hover:bg-primary-soft/40')}>
                   {c.done ? <CheckCircle2 className="size-4 shrink-0 text-success" /> : <Circle className="size-4 shrink-0 text-subtle" />}
-                  <span className="truncate">{c.label}</span>
+                  <span className="leading-snug">{c.label}</span>
                 </Link>
               ))}
             </div>

@@ -103,3 +103,46 @@ export async function recoverStuckMessages() {
     .eq('status', 'sending')
     .lt('updated_at', cutoff);
 }
+
+/** Emoji reactions people picked in the inbox (messages with reaction_out_pending). */
+export async function processReactions(manager: SessionManager) {
+  const { data, error } = await db
+    .from('messages')
+    .select('id, lead_id, account_id, direction, wa_message_id, reaction_out')
+    .eq('reaction_out_pending', true)
+    .order('updated_at')
+    .limit(50);
+  if (error) throw new Error(`reaction queue load failed: ${error.message}`);
+
+  for (const m of data ?? []) {
+    const flight = `reaction:${m.id}`;
+    if (inFlight.has(flight)) continue;
+    if (!m.account_id || !m.wa_message_id) {
+      await db.from('messages').update({ reaction_out_pending: false }).eq('id', m.id);
+      continue;
+    }
+    const session = manager.openSession(m.account_id);
+    if (!session) continue; // waits until the number is back
+    inFlight.add(flight);
+    void perAccount
+      .run(m.account_id, async () => {
+        const { data: lead } = await db.from('leads').select('phone').eq('id', m.lead_id).maybeSingle();
+        let sent = Boolean(lead?.phone);
+        if (lead?.phone) {
+          try {
+            await session.react(lead.phone, { id: m.wa_message_id!, fromMe: m.direction === 'out' }, m.reaction_out ?? '');
+          } catch (e) {
+            if (e instanceof NotConnectedError) return; // retried on the next tick
+            log.warn({ msg: m.id, err: errMsg(e) }, 'reaction failed');
+            sent = false;
+          }
+        }
+        // Leave it pending if someone picked a different emoji meanwhile.
+        let done = db.from('messages').update(sent ? { reaction_out_pending: false } : { reaction_out_pending: false, reaction_out: null }).eq('id', m.id);
+        done = m.reaction_out === null ? done.is('reaction_out', null) : done.eq('reaction_out', m.reaction_out);
+        await done;
+      })
+      .catch((e) => log.error({ msg: m.id, err: errMsg(e) }, 'reaction task failed'))
+      .finally(() => inFlight.delete(flight));
+  }
+}

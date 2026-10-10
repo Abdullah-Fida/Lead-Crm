@@ -5,7 +5,7 @@ import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, us
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Clock, FileText, GripVertical, MessageSquarePlus, Plus, Split, Trash2, X } from 'lucide-react';
-import type { CampaignVariant } from '@batsols/shared';
+import type { CampaignVariant, LeadFilters } from '@batsols/shared';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input, NativeSelect } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { MessageEditor } from '@/components/messaging/message-editor';
 import { MediaPicker } from '@/components/messaging/media-picker';
 import { useTemplates } from '@/components/whatsapp/chat';
+import { cleanFilters } from '@/lib/leads';
 import { cn } from '@/lib/utils';
 import { emptyVariant, newKey, type BuilderState, type BuilderStep } from './state';
 
@@ -21,6 +22,8 @@ const LETTERS = 'ABCDE';
 export function MessagesStep({ state, set }: { state: BuilderState; set: (fn: (s: BuilderState) => BuilderState) => void }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   const [first, ...followUps] = state.steps;
+  const { audience } = state;
+  const previewFilters = React.useMemo(() => cleanFilters(audience.mode === 'selection' && audience.ids ? { ids: audience.ids } : audience.filters), [audience]);
 
   const updateStep = (key: string, patch: Partial<BuilderStep>) => set((s) => ({ ...s, steps: s.steps.map((st) => (st.key === key ? { ...st, ...patch } : st)) }));
   const removeStep = (key: string) => set((s) => ({ ...s, steps: s.steps.filter((st) => st.key !== key) }));
@@ -41,7 +44,7 @@ export function MessagesStep({ state, set }: { state: BuilderState; set: (fn: (s
 
   return (
     <div className="space-y-4">
-      {first && <StepCard step={first} index={0} onChange={(p) => updateStep(first.key, p)} senderName={state.settings.sender_name} />}
+      {first && <StepCard step={first} index={0} onChange={(p) => updateStep(first.key, p)} senderName={state.settings.sender_name} previewFilters={previewFilters} />}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={followUps.map((f) => f.key)} strategy={verticalListSortingStrategy}>
@@ -55,6 +58,7 @@ export function MessagesStep({ state, set }: { state: BuilderState; set: (fn: (s
                   onChange={(p) => updateStep(step.key, p)}
                   onRemove={() => removeStep(step.key)}
                   senderName={state.settings.sender_name}
+                  previewFilters={previewFilters}
                 />
               )}
             </SortableStep>
@@ -96,6 +100,7 @@ function StepCard({
   onRemove,
   handle,
   senderName,
+  previewFilters,
 }: {
   step: BuilderStep;
   index: number;
@@ -103,6 +108,7 @@ function StepCard({
   onRemove?: () => void;
   handle?: React.ReactNode;
   senderName: string;
+  previewFilters?: LeadFilters;
 }) {
   const [active, setActive] = React.useState(0);
   const { data: templates = [] } = useTemplates();
@@ -218,6 +224,7 @@ function StepCard({
           onChange={(body) => setVariant({ body })}
           rows={index === 0 ? 7 : 5}
           senderName={senderName}
+          previewFilters={previewFilters}
           footer={<MediaPicker value={{ media_url: v.media_url ?? null, media_type: v.media_type ?? null, media_name: v.media_name ?? null }} onChange={(m) => setVariant(m)} />}
         />
       </div>

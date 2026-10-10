@@ -22,6 +22,13 @@ const IGNORED = new Set([
   'editedMessage',
 ]);
 
+/** An emoji reaction to another message; emoji '' means the reaction was removed. */
+export function extractReaction(msg: WAMessage): { targetId: string; emoji: string } | null {
+  const r = normalizeMessageContent(msg.message)?.reactionMessage;
+  if (!r?.key?.id) return null;
+  return { targetId: r.key.id, emoji: r.text ?? '' };
+}
+
 /** Pull readable text and media info out of any WhatsApp message; null = not a user-visible message. */
 export function extractContent(msg: WAMessage): ExtractedContent | null {
   const m = normalizeMessageContent(msg.message);

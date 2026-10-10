@@ -463,6 +463,13 @@ export class WaSession {
     return s.signalRepository.lidMapping.getPNForLID(lid);
   }
 
+  /** React to a message in the chat with `digits` ('' removes our reaction). */
+  async react(digits: string, target: { id: string; fromMe: boolean }, emoji: string) {
+    const s = this.requireSocket();
+    const jid = toWhatsAppJid(digits);
+    await s.sendMessage(jid, { react: { text: emoji, key: { remoteJid: jid, id: target.id, fromMe: target.fromMe } } });
+  }
+
   /** Send a message, optionally showing "typing…" first. Returns the WhatsApp message id. */
   async send(digits: string, content: { text: string; mediaUrl?: string | null; mediaType?: string | null; mediaName?: string | null; mimetype?: string | null }, opts: { typing?: boolean } = {}) {
     const s = this.requireSocket();

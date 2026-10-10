@@ -2,18 +2,16 @@
 
 import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Flame, Layers, ListChecks, MousePointerClick, ShieldCheck, Users } from 'lucide-react';
+import { Layers, MousePointerClick, ShieldCheck, Users } from 'lucide-react';
 import type { LeadFilters } from '@batsols/shared';
 import { FilterBar } from '@/components/leads/filter-bar';
 import { Card } from '@/components/ui/card';
 import { SwitchRow } from '@/components/ui/controls';
 import { Callout } from '@/components/ui/feedback';
 import { NativeSelect } from '@/components/ui/input';
-import { MultiSelect } from '@/components/ui/multi-select';
 import { Spinner } from '@/components/ui/spinner';
 import { getSupabase } from '@/lib/supabase/client';
 import { cleanFilters } from '@/lib/leads';
-import { useLeadLists } from '@/lib/lists';
 import { useWorkspace } from '@/lib/workspace';
 import { cn, formatNumber } from '@/lib/utils';
 import { effectiveFilters, type BuilderState } from './state';
@@ -39,7 +37,6 @@ export function useAudienceCount(audience: BuilderState['audience'], skipLandlin
 
 export function AudienceStep({ state, set, campaignId }: { state: BuilderState; set: (fn: (s: BuilderState) => BuilderState) => void; campaignId?: string }) {
   const a = state.audience;
-  const lists = useLeadLists();
   const count = useAudienceCount(a, state.settings.skip_landlines, campaignId);
   const setA = (patch: Partial<BuilderState['audience']>) => set((s) => ({ ...s, audience: { ...s.audience, ...patch } }));
   const setF = (f: LeadFilters) => setA({ filters: f });
@@ -79,27 +76,6 @@ export function AudienceStep({ state, set, campaignId }: { state: BuilderState; 
       {a.mode === 'filters' && (
         <Card className="space-y-3 p-4">
           <FilterBar filters={a.filters} onChange={setF} />
-          <div className="flex flex-wrap items-center gap-2">
-            <MultiSelect
-              label="Lead lists"
-              icon={<ListChecks />}
-              options={(lists.data ?? []).map((l) => ({ value: l.id, label: l.name, color: l.color }))}
-              value={a.filters.list_ids ?? []}
-              onChange={(v) => setF({ ...a.filters, list_ids: v })}
-              emptyText="No lists yet"
-            />
-            <MultiSelect
-              label="Quality"
-              icon={<Flame />}
-              options={[
-                { value: 'hot', label: 'Hot (70+)' },
-                { value: 'warm', label: 'Warm (40–69)' },
-                { value: 'cold', label: 'Cold (<40)' },
-              ]}
-              value={a.filters.tiers ?? []}
-              onChange={(v) => setF({ ...a.filters, tiers: v as Array<'hot' | 'warm' | 'cold'> })}
-            />
-          </div>
         </Card>
       )}
 
@@ -115,7 +91,7 @@ export function AudienceStep({ state, set, campaignId }: { state: BuilderState; 
             <div className="text-[13.5px] font-medium">Skip recently contacted leads</div>
             <div className="mt-0.5 text-[12.5px] text-muted">Avoid messaging someone again too soon.</div>
           </div>
-          <NativeSelect inputSize="sm" className="w-44" value={a.skipContactedDays ?? 0} onChange={(e) => setA({ skipContactedDays: Number(e.target.value) || null })}>
+          <NativeSelect inputSize="sm" className="w-56 shrink-0" value={a.skipContactedDays ?? 0} onChange={(e) => setA({ skipContactedDays: Number(e.target.value) || null })}>
             <option value={0}>Don’t skip</option>
             <option value={7}>Contacted in last 7 days</option>
             <option value={30}>Contacted in last 30 days</option>

@@ -10,7 +10,7 @@ import { every, errMsg } from './util';
 import { acquireLease, releaseLease, renewLease } from './lease';
 import { SessionManager } from './wa/manager';
 import { getMessage, handleUpdates, handleUpsert, onReply } from './messaging/inbound';
-import { processOutbox, recoverStuckMessages } from './messaging/outbox';
+import { processOutbox, processReactions, recoverStuckMessages } from './messaging/outbox';
 import { CampaignRunner } from './campaigns/runner';
 import { ScrapeWorker } from './scraper/worker';
 import { JobsWorker } from './jobs/worker';
@@ -56,6 +56,7 @@ async function main() {
     every(60_000, () => manager.watchdog(), onErr('session watchdog'), 30_000),
     every(30 * 60_000, () => manager.refreshLimits(), onErr('limits refresh'), 5 * 60_000),
     every(2_000, () => processOutbox(manager), onErr('outbox'), 2_000),
+    every(2_000, () => processReactions(manager), onErr('reactions'), 3_000),
     every(2_000, () => campaigns.tick(), onErr('campaigns'), 4_000),
     every(5 * 60_000, () => campaigns.recoverStuck(), onErr('campaign recovery'), 5 * 60_000),
     every(5 * 60_000, () => recoverStuckMessages(), onErr('message recovery'), 5 * 60_000),

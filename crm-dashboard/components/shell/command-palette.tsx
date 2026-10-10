@@ -53,8 +53,9 @@ export function CommandPalette() {
     const t = setTimeout(async () => {
       const { data } = await getSupabase()
         .rpc('filtered_leads', { p_workspace: workspace.id, p_filters: { q } })
-        .select('id, business_name, phone, city')
-        .order('created_at', { ascending: false })
+        // PostgREST can only sort an RPC result by columns it returns.
+        .select('id, business_name, phone, city, score')
+        .order('score', { ascending: false })
         .limit(6);
       if (!cancelled) setLeads((data ?? []) as LeadHit[]);
     }, 200);

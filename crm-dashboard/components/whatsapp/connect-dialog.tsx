@@ -58,6 +58,16 @@ export function ConnectDialog({ open, onOpenChange, account }: { open: boolean; 
     refetchInterval: 4000,
   });
 
+  // Live updates are the fast path; polling covers a missed event so "Connected" always shows.
+  React.useEffect(() => {
+    if (!open || step !== 'linking') return;
+    const t = setInterval(() => void qc.invalidateQueries({ queryKey: qk.accounts(workspace.id) }), 4000);
+    return () => clearInterval(t);
+  }, [open, step, qc, workspace.id]);
+
+  // A code on screen means WhatsApp is waiting for the phone, even if the account row hasn't refreshed yet.
+  const waitingForPhone = live?.status === 'qr' || live?.status === 'pairing' || Boolean(code.data?.qr || code.data?.pairing_code);
+
   async function begin() {
     const pairing = method === 'code' ? normalizePhone(phone, workspace.default_country) : null;
     if (method === 'code' && !pairing?.valid) {
@@ -216,9 +226,9 @@ export function ConnectDialog({ open, onOpenChange, account }: { open: boolean; 
                         {engine.online ? 'Generating a secure code…' : 'Waiting for the engine…'}
                       </div>
                     )}
-                    <div className={cn('mt-3 flex items-center gap-2 text-xs', live?.status === 'qr' || live?.status === 'pairing' ? 'text-whatsapp' : 'text-subtle')}>
+                    <div className={cn('mt-3 flex items-center gap-2 text-xs', waitingForPhone ? 'text-whatsapp' : 'text-subtle')}>
                       <span className="size-1.5 animate-pulse-ring rounded-full bg-current" />
-                      {live?.status === 'qr' || live?.status === 'pairing' ? 'Waiting for your phone…' : 'Connecting to WhatsApp…'}
+                      {waitingForPhone ? 'Waiting for your phone…' : 'Connecting to WhatsApp…'}
                     </div>
                   </div>
                 </div>

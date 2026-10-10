@@ -56,7 +56,8 @@ legacy/, server/, Whatsapp Automation/   the old prototype (no longer used — s
 - Live monitor: funnel, activity log, recipients, A/B results, per-sender breakdown, add leads, retry failed, export
 
 **Inbox, templates, tasks, automations, reports**
-- Shared inbox across all numbers with unread counts, assignment, archive and lead context
+- Shared inbox across all numbers with unread counts, assignment, archive and lead context; emoji reactions both ways
+  (see a lead’s 👍, react back from the dashboard)
 - Template library (team or personal) with preview against real leads and quality checks
 - Tasks (to-do, call, meeting, follow-up) with assignees and due dates
 - **Automations**: when (reply, keyword, stage change, campaign ended without reply, new lead) → then (send
@@ -101,7 +102,7 @@ Keep the service-role key secret: it bypasses row-level security and is only use
 ## Tests
 
 ```bash
-npm run test:db                 # 79 database tests: schema, RLS isolation, roles, sharing, reports (PGlite)
+npm run test:db                 # 85 database tests: schema, RLS isolation, roles, sharing, reports (PGlite)
 npm test -w @batsols/shared     # templating, spintax, phone numbers, sending windows
 npm run typecheck
 ```

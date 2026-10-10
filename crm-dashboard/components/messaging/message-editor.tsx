@@ -12,6 +12,7 @@ import {
   seededRng,
   spintaxVariantCount,
   type Lead,
+  type LeadFilters,
 } from '@batsols/shared';
 import { WhatsAppIcon } from '@/components/brand';
 import { Button } from '@/components/ui/button';
@@ -20,23 +21,24 @@ import { getSupabase } from '@/lib/supabase/client';
 import { useWorkspace } from '@/lib/workspace';
 import { cn, formatCompact } from '@/lib/utils';
 
-/** A real lead from the workspace for previews (falls back to sample values). */
-export function usePreviewLead(): Partial<Lead> {
+const PREVIEW_COLUMNS = 'business_name, contact_name, city, category, website, address, rating, reviews_count';
+
+/** A real lead for previews — from `filters` (e.g. a campaign's audience) when given; falls back to sample values. */
+export function usePreviewLead(filters?: LeadFilters): Partial<Lead> {
   const { workspace } = useWorkspace();
   const { data } = useQuery({
-    queryKey: ['preview-lead', workspace.id],
+    queryKey: ['preview-lead', workspace.id, filters ?? null],
     queryFn: async () => {
-      const { data } = await getSupabase()
-        .from('leads')
-        .select('business_name, contact_name, city, category, website, address, rating, reviews_count')
-        .eq('workspace_id', workspace.id)
-        .not('city', 'is', null)
-        .order('score', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const sb = getSupabase();
+      if (filters) {
+        const { data } = await sb.rpc('filtered_leads', { p_workspace: workspace.id, p_filters: filters }).select(`${PREVIEW_COLUMNS}, score`).order('score', { ascending: false }).limit(1).maybeSingle();
+        if (data) return data as Partial<Lead>;
+      }
+      const { data } = await sb.from('leads').select(PREVIEW_COLUMNS).eq('workspace_id', workspace.id).not('city', 'is', null).order('score', { ascending: false }).limit(1).maybeSingle();
       return data as Partial<Lead> | null;
     },
-    staleTime: 5 * 60_000,
+    staleTime: 60_000,
+    placeholderData: (prev) => prev,
   });
   return (
     data ??
@@ -53,6 +55,7 @@ export function MessageEditor({
   footer,
   showPreview = true,
   senderName,
+  previewFilters,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -62,10 +65,12 @@ export function MessageEditor({
   footer?: React.ReactNode;
   showPreview?: boolean;
   senderName?: string;
+  /** Preview with a lead from this audience instead of any lead. */
+  previewFilters?: LeadFilters;
 }) {
   const ref = React.useRef<HTMLTextAreaElement>(null);
   const { profile, workspace } = useWorkspace();
-  const lead = usePreviewLead();
+  const lead = usePreviewLead(previewFilters);
   const [seed, setSeed] = React.useState(1);
 
   const insert = (text: string, selectInner = false) => {

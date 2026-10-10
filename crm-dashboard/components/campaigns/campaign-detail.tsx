@@ -53,6 +53,8 @@ const RECIPIENT_TONE: Record<string, 'neutral' | 'primary' | 'success' | 'warnin
   cancelled: 'warning',
 };
 
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
 export function CampaignDetail({ id }: { id: string }) {
   const router = useRouter();
   const { data, isLoading } = useCampaign(id);
@@ -214,7 +216,7 @@ function Inner({ c, steps, stats, members, accounts, leadId, setLeadId, addOpen,
           <CardHeader title="Setup" />
           <CardContent className="space-y-2.5 text-[13px]">
             {[
-              ['Messages', `${steps.length} step${steps.length === 1 ? '' : 's'} · ${steps.reduce((n, s) => n + s.variants.length, 0)} variants`],
+              ['Messages', `${steps.length} step${steps.length === 1 ? '' : 's'} · ${plural(steps.reduce((n, s) => n + s.variants.length, 0), 'variant')}`],
               ['Senders', c.account_ids.map((a) => accounts.get(a)?.label ?? 'Removed number').join(', ') || '—'],
               ['Pace', `${settings.min_delay_sec}–${settings.max_delay_sec}s · break ${settings.batch_pause_min}m / ${settings.batch_size}`],
               ['Hours', `${settings.window.start}–${settings.window.end} (${settings.window.timezone})`],

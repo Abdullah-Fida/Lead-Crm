@@ -55,15 +55,20 @@ export function Field({
   className?: string;
   optional?: boolean;
 }) {
+  // Tie the label to a single control automatically so clicking the label
+  // focuses it and screen readers announce it.
+  const autoId = React.useId();
+  const only = !htmlFor && label && React.isValidElement<{ id?: string }>(children) ? children : null;
+  const id = htmlFor ?? (only ? (only.props.id ?? autoId) : undefined);
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
       {label && (
-        <Label htmlFor={htmlFor} className="flex items-center gap-1.5">
+        <Label htmlFor={id} className="flex items-center gap-1.5">
           {label}
           {optional && <span className="text-xs font-normal text-subtle">Optional</span>}
         </Label>
       )}
-      {children}
+      {only && !only.props.id ? React.cloneElement(only, { id }) : children}
       {error ? <p className="text-xs text-danger">{error}</p> : hint ? <p className="text-xs text-subtle">{hint}</p> : null}
     </div>
   );

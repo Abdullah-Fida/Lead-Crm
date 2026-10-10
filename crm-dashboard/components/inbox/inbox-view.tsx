@@ -12,11 +12,11 @@ import { Segmented } from '@/components/ui/controls';
 import { EmptyState, Skeleton } from '@/components/ui/feedback';
 import { Input, NativeSelect } from '@/components/ui/input';
 import { Tooltip } from '@/components/ui/menu';
-import { Composer, MessageThread } from '@/components/whatsapp/chat';
+import { Composer, MessageThread, useReactToMessage } from '@/components/whatsapp/chat';
 import { LeadDrawer } from '@/components/leads/lead-drawer';
 import { OwnerSelect, Rating, StageSelect, WaStatus } from '@/components/leads/bits';
 import { getSupabase } from '@/lib/supabase/client';
-import { qk, useAccounts, useMembers, useRealtime } from '@/lib/queries';
+import { qk, useAccounts, useMembers, useRealtime, useUsableAccounts } from '@/lib/queries';
 import { useLead, useUpdateLead } from '@/lib/leads';
 import { useWorkspace } from '@/lib/workspace';
 import { cn, hostname, shortDate } from '@/lib/utils';
@@ -195,6 +195,9 @@ function ChatPane({ conv, onBack, onOpenLead }: { conv: ConvRow; onBack: () => v
     refetchInterval: 4000,
   });
   const account = accountById.get(conv.account_id);
+  const { accounts: usable } = useUsableAccounts();
+  const react = useReactToMessage({ optimisticKey: key });
+  const canReact = usable.some((a) => a.id === conv.account_id);
   const assignee = conv.assigned_to ? members.get(conv.assigned_to) : undefined;
 
   async function setConv(patch: Partial<Conversation>) {
@@ -229,6 +232,7 @@ function ChatPane({ conv, onBack, onOpenLead }: { conv: ConvRow; onBack: () => v
           messages={[...(messages.data ?? []), ...(queued.data ?? [])]}
           className="min-h-0 flex-1 bg-[#efeae2]/60 dark:bg-[#0b141a]/60"
           emptyHint="No messages in this chat yet."
+          onReact={canReact ? react : undefined}
         />
         {lead && <Composer lead={lead} defaultAccountId={conv.account_id} lockAccount onSent={() => queued.refetch()} />}
         {assignee && <div className="border-t border-border px-4 py-1.5 text-[11px] text-subtle">Assigned to {assignee.profile.full_name}</div>}

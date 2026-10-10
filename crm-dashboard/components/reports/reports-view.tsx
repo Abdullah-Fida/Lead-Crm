@@ -29,15 +29,17 @@ function rangeDates(r: Range): { from: Date; to: Date } {
 }
 
 export function ReportsView() {
-  const { workspace, can } = useWorkspace();
+  const { workspace, can, role } = useWorkspace();
   const [range, setRange] = React.useState<Range>('30d');
   const [member, setMember] = React.useState('');
   const { from, to } = rangeDates(range);
   const args = { p_workspace: workspace.id, p_from: from.toISOString(), p_to: to.toISOString() };
   const key = [workspace.id, range];
 
+  // Team totals are for admins and viewers; members get their own numbers only.
+  const seesTeam = can.admin || role === 'viewer';
   const members = useQuery({ queryKey: ['report-members', ...key], queryFn: async () => ((await getSupabase().rpc('report_members', args)).data ?? []) as MemberReportRow[] });
-  const teams = useQuery({ queryKey: ['report-teams', ...key], enabled: can.admin || members.data !== undefined, queryFn: async () => { const r = await getSupabase().rpc('report_teams', args); return (r.error ? [] : r.data) as TeamReportRow[]; } });
+  const teams = useQuery({ queryKey: ['report-teams', ...key], enabled: seesTeam, queryFn: async () => { const r = await getSupabase().rpc('report_teams', args); return (r.error ? [] : r.data) as TeamReportRow[]; } });
   const senders = useQuery({ queryKey: ['report-senders', ...key], queryFn: async () => ((await getSupabase().rpc('report_campaign_senders', { ...args, p_campaign: null })).data ?? []) as CampaignSenderRow[] });
   const daily = useQuery({ queryKey: ['report-daily', ...key], queryFn: async () => ((await getSupabase().rpc('report_daily', args)).data ?? []) as DailyReportRow[] });
 
@@ -201,7 +203,7 @@ export function ReportsView() {
         )}
       </Card>
 
-      {can.admin && (teams.data?.length ?? 0) > 0 && (
+      {seesTeam && (teams.data?.length ?? 0) > 0 && (
         <Card className="mb-5 overflow-hidden">
           <CardHeader title="By team" />
           <Table>

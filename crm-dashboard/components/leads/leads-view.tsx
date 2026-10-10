@@ -104,12 +104,15 @@ export function LeadsView() {
 
   const leadId = params.get('lead');
   const showNew = params.get('new') === '1';
-  const setParam = (key: string, value: string | null) => {
+  const setParams = (patch: Record<string, string | null>) => {
     const next = new URLSearchParams(params.toString());
-    if (value === null) next.delete(key);
-    else next.set(key, value);
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === null) next.delete(key);
+      else next.set(key, value);
+    }
     router.replace(`${pathname}${next.size ? `?${next}` : ''}`, { scroll: false });
   };
+  const setParam = (key: string, value: string | null) => setParams({ [key]: value });
 
   const effective: LeadFilters = React.useMemo(() => ({ ...filters, ...VIEW_FILTERS[view](userId) }), [filters, view, userId]);
   const { data, isLoading, isFetching } = useLeadsList({ filters: effective, sort, page, pageSize: PAGE_SIZE });
@@ -426,7 +429,7 @@ export function LeadsView() {
       )}
 
       <LeadDrawer leadId={leadId} onClose={() => setParam('lead', null)} />
-      <LeadFormDialog open={showNew} onOpenChange={(o) => !o && setParam('new', null)} onSaved={(l) => setParam('lead', l.id)} />
+      <LeadFormDialog open={showNew} onOpenChange={(o) => !o && setParam('new', null)} onSaved={(l) => setParams({ new: null, lead: l.id })} />
       <ImportDialog open={dialog === 'import'} onOpenChange={(o) => setDialog(o ? 'import' : null)} />
       <TagsDialog
         open={dialog === 'add-tags' || dialog === 'remove-tags'}
@@ -540,7 +543,7 @@ const LeadRow = React.memo(function LeadRow({
           </div>
         </div>
       </Td>
-      <Td>
+      <Td className="whitespace-nowrap">
         <div className="flex items-center gap-1.5">
           <WaStatus lead={lead} />
           <PhoneText phone={lead.phone} copy />
@@ -559,12 +562,14 @@ const LeadRow = React.memo(function LeadRow({
       <Td>
         <Rating rating={lead.rating} reviews={lead.reviews_count} />
       </Td>
-      <Td className="max-w-[180px]">
-        <div className="flex flex-wrap gap-1">
+      <Td className="max-w-[200px]">
+        <div className="flex items-center gap-1">
           {lead.tags.slice(0, 2).map((t) => (
-            <Tag key={t}>{t}</Tag>
+            <Tag key={t} className="max-w-[120px]">
+              {t}
+            </Tag>
           ))}
-          {lead.tags.length > 2 && <span className="text-[11px] text-subtle">+{lead.tags.length - 2}</span>}
+          {lead.tags.length > 2 && <span className="shrink-0 text-[11px] text-subtle">+{lead.tags.length - 2}</span>}
         </div>
       </Td>
       <Td className="whitespace-nowrap text-xs text-muted">

@@ -33,7 +33,7 @@ import { EmptyState, Skeleton, useConfirm } from '@/components/ui/feedback';
 import { Input, NativeSelect, Textarea } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Tooltip } from '@/components/ui/menu';
 import { TagInput } from '@/components/ui/multi-select';
-import { Composer, MessageThread } from '@/components/whatsapp/chat';
+import { Composer, MessageThread, useReactToMessage } from '@/components/whatsapp/chat';
 import { LeadFormDialog } from './lead-form';
 import { LandlineBadge, OwnerSelect, PhoneText, Rating, StageSelect, WaStatus } from './bits';
 import { getSupabase } from '@/lib/supabase/client';
@@ -64,6 +64,8 @@ function LeadPanel({ leadId, onClose, initialTab }: { leadId: string; onClose: (
   const qc = useQueryClient();
 
   useRealtime('messages', `lead_id=eq.${leadId}`, [qk.leadTimeline(leadId)]);
+  const timelineKeys = React.useMemo(() => [qk.leadTimeline(leadId)], [leadId]);
+  const react = useReactToMessage({ invalidate: timelineKeys });
 
   if (isLoading || !lead) {
     return (
@@ -236,6 +238,7 @@ function LeadPanel({ leadId, onClose, initialTab }: { leadId: string; onClose: (
             messages={messages}
             className="min-h-0 flex-1 bg-surface-2/40"
             emptyHint={lead.phone ? `Start the conversation with ${lead.business_name}.` : 'Add a phone number to message this lead.'}
+            onReact={can.write ? react : undefined}
           />
           <Composer lead={lead} defaultAccountId={lastAccount} />
         </TabsContent>

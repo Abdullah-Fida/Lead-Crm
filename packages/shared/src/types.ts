@@ -494,6 +494,11 @@ export type Message = {
   status: MessageStatus;
   error: string | null;
   sent_by: UUID | null;
+  /** The lead's emoji reaction to this message. */
+  reaction_in: string | null;
+  /** Our emoji reaction; pending until the engine has sent it. */
+  reaction_out: string | null;
+  reaction_out_pending: boolean;
   created_at: Timestamp;
   updated_at: Timestamp;
 };
@@ -621,6 +626,8 @@ export type ChatMessage = {
   mentions: UUID[];
   edited_at: Timestamp | null;
   deleted_at: Timestamp | null;
+  /** Bumped whenever a reaction is added or removed (drives live updates). */
+  reacted_at: Timestamp | null;
   created_at: Timestamp;
 };
 
@@ -875,6 +882,7 @@ export type Database = {
       };
       chat_open_dm: { Args: { p_workspace: string; p_user_ids: string[] }; Returns: string };
       chat_add_members: { Args: { p_channel: string; p_user_ids: string[] }; Returns: number };
+      message_react: { Args: { p_message: string; p_emoji: string }; Returns: undefined };
       chat_overview: { Args: { p_workspace: string }; Returns: ChatOverviewRow[] };
       account_health: { Args: { p_workspace: string; p_days?: number }; Returns: AccountHealth[] };
       engine_acquire_lease: { Args: { p_instance: string; p_ttl_seconds?: number }; Returns: boolean };

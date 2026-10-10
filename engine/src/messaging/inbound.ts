@@ -7,8 +7,8 @@ import { isOptOut, normalizePhone, type Lead, type RecipientStatus } from '@bats
 import { db } from '../db';
 import { baileysLogger, log } from '../log';
 import { firstStageOfKind, getWorkspace, logActivity, notify, settingsOf, stagesOf, touchConversation } from '../common';
-import { errMsg } from '../util';
-import { extFromMime, extractContent, partnerDigits, previewOf } from '../wa/content';
+import { errMsg, nowIso } from '../util';
+import { extFromMime, extractContent, extractReaction, partnerDigits, previewOf } from '../wa/content';
 import type { WaSession } from '../wa/session';
 
 export type ReplyListener = (args: { workspaceId: string; leadId: string; accountId: string; text: string; firstReply: boolean }) => Promise<void>;
@@ -54,6 +54,9 @@ async function handleOne(session: WaSession, msg: WAMessage, type: string) {
     if (known) return;
   }
   if (type !== 'notify' && !fromMe) return;
+
+  const reaction = extractReaction(msg);
+  if (reaction) return handleReaction(session, fromMe, reaction);
 
   const content = extractContent(msg);
   if (!content) return;
@@ -195,6 +198,43 @@ async function handleOne(session: WaSession, msg: WAMessage, type: string) {
       log.warn({ err: errMsg(e) }, 'reply listener failed'),
     );
   }
+}
+
+/** An emoji reaction to a message in the chat, by the lead or by us from the phone. */
+async function handleReaction(session: WaSession, fromMe: boolean, reaction: { targetId: string; emoji: string }) {
+  const { data: target } = await db
+    .from('messages')
+    .select('id, lead_id, body')
+    .eq('account_id', session.accountId)
+    .eq('wa_message_id', reaction.targetId)
+    .maybeSingle();
+  if (!target) return; // a message we never stored, e.g. a personal chat
+  const emoji = reaction.emoji || null;
+  if (fromMe) {
+    await db.from('messages').update({ reaction_out: emoji }).eq('id', target.id);
+    return;
+  }
+  await db.from('messages').update({ reaction_in: emoji }).eq('id', target.id);
+  if (!emoji) return;
+
+  const workspaceId = session.account.workspace_id;
+  const { data: lead } = await db.from('leads').select('id, business_name, owner_id').eq('id', target.lead_id).maybeSingle();
+  if (!lead) return;
+  const quoted = target.body ? `“${target.body.slice(0, 60)}”` : 'your message';
+  const conversationId = await touchConversation({
+    workspaceId,
+    accountId: session.accountId,
+    leadId: lead.id,
+    preview: `Reacted ${emoji} to ${quoted}`,
+    direction: 'in',
+    at: nowIso(),
+  });
+  await notify(workspaceId, [lead.owner_id ?? session.account.owner_id], {
+    type: 'reply',
+    title: `${lead.business_name} reacted ${emoji}`,
+    body: target.body.slice(0, 160) || null,
+    link: `/inbox?c=${conversationId}`,
+  });
 }
 
 const STATUS_RANK: Record<string, number> = { queued: 0, sending: 1, sent: 2, delivered: 3, read: 4, failed: -1, received: 0 };

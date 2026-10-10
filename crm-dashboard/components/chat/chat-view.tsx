@@ -146,9 +146,12 @@ function ChannelPane({ channel, title, onBack }: { channel: ChannelRow; title: s
   const confirm = useConfirm();
   const [leadId, setLeadId] = React.useState<string | null>(null);
   const [addMembers, setAddMembers] = React.useState(false);
+  const [pickerFor, setPickerFor] = React.useState<string | null>(null);
+  const [editing, setEditing] = React.useState<{ id: string; body: string } | null>(null);
   const key = ['chat-messages', channel.id];
-  useRealtime('chat_messages', `channel_id=eq.${channel.id}`, [key, ['chat-channels', workspace.id]]);
-  useRealtime('chat_reactions', `workspace_id=eq.${workspace.id}`, [['chat-reactions', channel.id]]);
+  const reactionsKey = ['chat-reactions', channel.id];
+  // Reaction changes touch their message (reacted_at), so this one feed covers both.
+  useRealtime('chat_messages', `channel_id=eq.${channel.id}`, [key, reactionsKey, ['chat-channels', workspace.id]]);
   const { data: messages = [] } = useQuery({
     queryKey: key,
     queryFn: async () => {
@@ -158,11 +161,12 @@ function ChannelPane({ channel, title, onBack }: { channel: ChannelRow; title: s
     },
   });
   const { data: reactions = [] } = useQuery({
-    queryKey: ['chat-reactions', channel.id],
+    queryKey: reactionsKey,
     enabled: messages.length > 0,
     queryFn: async () => {
-      const { data } = await getSupabase().from('chat_reactions').select('*').in('message_id', messages.map((m) => m.id).slice(-150));
-      return (data ?? []) as ChatReaction[];
+      const { data, error } = await getSupabase().from('chat_reactions').select('*').in('message_id', messages.map((m) => m.id).slice(-150));
+      if (error) throw error;
+      return data as ChatReaction[];
     },
   });
   const endRef = React.useRef<HTMLDivElement>(null);
@@ -190,16 +194,30 @@ function ChannelPane({ channel, title, onBack }: { channel: ChannelRow; title: s
     onBack();
   }
   async function react(m: Msg, emoji: string) {
-    const mine = reactions.find((r) => r.message_id === m.id && r.user_id === userId && r.emoji === emoji);
+    setPickerFor(null);
+    const mine = reactions.some((r) => r.message_id === m.id && r.user_id === userId && r.emoji === emoji);
+    // Show it straight away; the server result replaces it.
+    await qc.cancelQueries({ queryKey: reactionsKey });
+    qc.setQueryData<ChatReaction[]>(reactionsKey, (list = []) =>
+      mine
+        ? list.filter((r) => !(r.message_id === m.id && r.user_id === userId && r.emoji === emoji))
+        : [...list, { message_id: m.id, workspace_id: workspace.id, user_id: userId, emoji, created_at: new Date().toISOString() }],
+    );
     const sb = getSupabase();
-    if (mine) await sb.from('chat_reactions').delete().eq('message_id', m.id).eq('user_id', userId).eq('emoji', emoji);
-    else await sb.from('chat_reactions').insert({ message_id: m.id, workspace_id: workspace.id, user_id: userId, emoji });
-    qc.invalidateQueries({ queryKey: ['chat-reactions', channel.id] });
+    const { error } = mine
+      ? await sb.from('chat_reactions').delete().eq('message_id', m.id).eq('user_id', userId).eq('emoji', emoji)
+      : await sb.from('chat_reactions').upsert({ message_id: m.id, workspace_id: workspace.id, user_id: userId, emoji }, { onConflict: 'message_id,user_id,emoji', ignoreDuplicates: true });
+    if (error) toast.error(errorMessage(error));
+    qc.invalidateQueries({ queryKey: reactionsKey });
   }
-  async function edit(m: Msg) {
-    const body = window.prompt('Edit message', m.body);
-    if (body === null || !body.trim()) return;
-    await getSupabase().from('chat_messages').update({ body, edited_at: new Date().toISOString() }).eq('id', m.id);
+  async function saveEdit() {
+    if (!editing) return;
+    const body = editing.body.trim();
+    const original = messages.find((m) => m.id === editing.id)?.body;
+    setEditing(null);
+    if (!body || body === original) return;
+    const { error } = await getSupabase().from('chat_messages').update({ body, edited_at: new Date().toISOString() }).eq('id', editing.id);
+    if (error) toast.error(errorMessage(error));
     qc.invalidateQueries({ queryKey: key });
   }
   async function remove(m: Msg) {
@@ -264,6 +282,32 @@ function ChannelPane({ channel, title, onBack }: { channel: ChannelRow; title: s
                   )}
                   {m.deleted_at ? (
                     <p className="text-[13px] italic text-subtle">Message deleted</p>
+                  ) : editing?.id === m.id ? (
+                    <div className="mt-1 space-y-1.5">
+                      <textarea
+                        autoFocus
+                        value={editing.body}
+                        onChange={(e) => setEditing({ id: m.id, body: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                            e.preventDefault();
+                            void saveEdit();
+                          } else if (e.key === 'Escape') setEditing(null);
+                        }}
+                        rows={Math.min(6, editing.body.split('\n').length + 1)}
+                        aria-label="Edit message"
+                        className="w-full resize-none rounded-lg border border-primary bg-surface px-3 py-2 text-[13.5px] outline-none ring-[3px] ring-ring/30"
+                      />
+                      <div className="flex items-center gap-2 text-[11px] text-subtle">
+                        <Button size="xs" variant="primary" onClick={saveEdit}>
+                          Save
+                        </Button>
+                        <Button size="xs" variant="ghost" onClick={() => setEditing(null)}>
+                          Cancel
+                        </Button>
+                        Enter to save · Esc to cancel
+                      </div>
+                    </div>
                   ) : (
                     <p className="whitespace-pre-wrap break-words text-[13.5px] leading-relaxed">
                       {renderMentions(m.body, m.mentions, userId)}
@@ -292,8 +336,13 @@ function ChannelPane({ channel, title, onBack }: { channel: ChannelRow; title: s
                   )}
                 </div>
                 {!m.deleted_at && channel.joined && (
-                  <div className="absolute -top-3 right-2 hidden items-center gap-0.5 rounded-lg border border-border bg-surface p-0.5 shadow-sm group-hover:flex">
-                    <Popover>
+                  <div
+                    className={cn(
+                      'absolute -top-3 right-2 flex items-center gap-0.5 rounded-lg border border-border bg-surface p-0.5 shadow-sm transition-opacity focus-within:opacity-100',
+                      pickerFor === m.id ? 'opacity-100' : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100',
+                    )}
+                  >
+                    <Popover open={pickerFor === m.id} onOpenChange={(o) => setPickerFor(o ? m.id : null)}>
                       <PopoverTrigger asChild>
                         <button className="rounded p-1 text-subtle hover:bg-surface-2 hover:text-foreground" aria-label="React">
                           <SmilePlus className="size-3.5" />
@@ -301,14 +350,14 @@ function ChannelPane({ channel, title, onBack }: { channel: ChannelRow; title: s
                       </PopoverTrigger>
                       <PopoverContent className="flex gap-1 p-1.5" align="end">
                         {REACTIONS.map((e) => (
-                          <button key={e} className="rounded p-1 text-base hover:bg-surface-2" onClick={() => react(m, e)}>
+                          <button key={e} aria-label={`React ${e}`} className={cn('rounded p-1 text-base transition-transform hover:scale-125 hover:bg-surface-2', rx.some((r) => r.emoji === e && r.user_id === userId) && 'bg-primary-soft')} onClick={() => react(m, e)}>
                             {e}
                           </button>
                         ))}
                       </PopoverContent>
                     </Popover>
                     {mine && (
-                      <button className="rounded p-1 text-subtle hover:bg-surface-2 hover:text-foreground" onClick={() => edit(m)} aria-label="Edit">
+                      <button className="rounded p-1 text-subtle hover:bg-surface-2 hover:text-foreground" onClick={() => setEditing({ id: m.id, body: m.body })} aria-label="Edit">
                         <Pencil className="size-3.5" />
                       </button>
                     )}

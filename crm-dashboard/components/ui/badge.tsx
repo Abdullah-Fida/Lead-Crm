@@ -51,8 +51,8 @@ export function StageBadge({ name, color, className }: { name: string; color: st
 
 export function Tag({ children, onRemove, className }: { children: React.ReactNode; onRemove?: () => void; className?: string }) {
   return (
-    <span className={cn('inline-flex h-5 items-center gap-1 rounded bg-surface-2 px-1.5 text-[11.5px] font-medium text-muted', className)}>
-      #{children}
+    <span className={cn('inline-flex h-5 max-w-full items-center gap-1 whitespace-nowrap rounded bg-surface-2 px-1.5 text-[11.5px] font-medium text-muted', className)}>
+      <span className="truncate">#{children}</span>
       {onRemove && (
         <button type="button" onClick={onRemove} className="-mr-0.5 rounded text-subtle hover:text-foreground" aria-label="Remove tag">
           ×

@@ -228,7 +228,18 @@ function AutomationDialog({ value, onClose, onSaved }: { value: Partial<Automati
 
   async function save() {
     if (!a.name?.trim()) return toast.error('Name the automation');
+    if (!a.trigger) return toast.error('Pick when it runs');
+    if (a.trigger === 'keyword' && !c.keywords?.length) return toast.error('Add at least one keyword');
     if (!actions.length) return toast.error('Add at least one action');
+    const incomplete = actions.find(
+      (x) =>
+        (x.type === 'send_template' && !x.template_id) ||
+        (x.type === 'send_text' && !x.body.trim()) ||
+        (x.type === 'move_stage' && !x.stage_id) ||
+        (x.type === 'add_tag' && !x.tag.trim()) ||
+        (x.type === 'create_task' && !x.title.trim()),
+    );
+    if (incomplete) return toast.error(`Finish the “${ACTIONS[incomplete.type].label}” step`);
     const sb = getSupabase();
     const row = { name: a.name.trim(), trigger: a.trigger!, conditions: c, actions, enabled: a.enabled ?? true };
     const { error } = a.id

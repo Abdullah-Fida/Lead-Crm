@@ -9,6 +9,45 @@ import type { PlaceResult } from './types';
 
 export class BlockedError extends Error {}
 
+const COUNTRY_NAMES = (() => {
+  const names = new Set<string>();
+  const dn = new Intl.DisplayNames(['en'], { type: 'region' });
+  const A = 'A'.charCodeAt(0);
+  for (let i = 0; i < 26; i++)
+    for (let j = 0; j < 26; j++) {
+      const code = String.fromCharCode(A + i, A + j);
+      try {
+        const name = dn.of(code);
+        if (name && name !== code) names.add(name.toLowerCase());
+      } catch {
+        /* not a region */
+      }
+    }
+  for (const n of ['usa', 'uk', 'uae', 'united states of america']) names.add(n);
+  return names;
+})();
+
+/**
+ * City from a Google Maps address such as "28K Sir Syed Rd, Gulberg 2, Lahore, 54000, Pakistan",
+ * "1 Main St, Austin, TX 78701, United States" or "Torstraße 5, 10115 Berlin, Germany".
+ */
+export function cityFromAddress(address: string | null | undefined): string | null {
+  const parts = (address ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (parts.length < 2) return null;
+  if (COUNTRY_NAMES.has(parts[parts.length - 1]!.toLowerCase())) parts.pop();
+  for (let i = parts.length - 1; i >= 1; i--) {
+    const part = parts[i]!;
+    if (/^[\d\s-]+$/.test(part)) continue; // postcode on its own
+    const postFirst = part.match(/^\d{3,}[\d\s-]*\s+(\D.*)$/); // "10115 Berlin"
+    if (postFirst) return postFirst[1]!.trim();
+    if (/\D\s+\d{3,}[\d\s-]*$/.test(part)) continue; // "TX 78701", "Punjab 54000": region + postcode
+    const words = part.split(/\s+/).filter((w) => !/\d/.test(w)).join(' ');
+    if (!words || /^[A-Z]{1,3}$/.test(words)) continue;
+    return words;
+  }
+  return null;
+}
+
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 const pause = (min: number, max: number) => new Promise((r) => setTimeout(r, min + Math.random() * (max - min)));
 
@@ -35,6 +74,9 @@ export class MapsBrowser {
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled', '--lang=en-US'],
     });
     this.ctx = await this.browser.newContext({ locale: 'en-US', userAgent: UA, viewport: { width: 1366, height: 900 } });
+    // tsx (dev) compiles with keepNames, which wraps functions passed to page.evaluate in a __name()
+    // helper that doesn't exist inside the page. Define a no-op so those functions run.
+    await this.ctx.addInitScript('globalThis.__name = globalThis.__name || ((fn) => fn);');
     // Skip images/fonts: faster and lighter on memory.
     await this.ctx.route('**/*', (route) => {
       const t = route.request().resourceType();
@@ -155,14 +197,13 @@ export class MapsBrowser {
     }
     const rating = data.ratingText ? Number(data.ratingText.replace(',', '.')) : NaN;
     const reviews = data.reviewsLabel ? Number((data.reviewsLabel.match(/[\d,.]+/)?.[0] ?? '').replace(/[,.]/g, '')) : NaN;
-    const addressParts = (data.address ?? '').split(',').map((s) => s.trim()).filter(Boolean);
     return {
       placeId,
       name: data.name,
       phone: data.phoneId ? data.phoneId.replace(/^phone:tel:/, '') : null,
       website: website && !website.includes('google.') ? website : null,
       address: data.address,
-      city: addressParts.length >= 2 ? addressParts[addressParts.length - 2]!.replace(/\d+/g, '').trim() || null : null,
+      city: cityFromAddress(data.address),
       country: null,
       category: data.category,
       rating: Number.isFinite(rating) ? rating : null,

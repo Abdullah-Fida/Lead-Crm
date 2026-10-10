@@ -1,8 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Check, CheckCheck, Clock, FileText, ImageIcon, Send, Sparkles } from 'lucide-react';
+import { useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { AlertCircle, Check, CheckCheck, Clock, FileText, ImageIcon, Send, SmilePlus, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { buildTemplateVars, renderTemplate, type Lead, type Message, type MessageTemplate } from '@batsols/shared';
 import { WhatsAppIcon } from '@/components/brand';
@@ -57,13 +57,73 @@ function MediaChip({ m }: { m: Message }) {
   );
 }
 
-export function MessageBubble({ m, showCampaign }: { m: Message; showCampaign?: boolean }) {
-  const out = m.direction === 'out';
+const WA_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
+export type ReactHandler = (m: Message, emoji: string) => void;
+
+/** React to WhatsApp messages from the dashboard; the engine sends the reaction from the same number. */
+export function useReactToMessage(opts: { optimisticKey?: QueryKey; invalidate?: QueryKey[] }): ReactHandler {
+  const qc = useQueryClient();
+  const { optimisticKey, invalidate } = opts;
+  return React.useCallback(
+    async (m: Message, emoji: string) => {
+      if (optimisticKey) {
+        qc.setQueryData<Message[]>(optimisticKey, (list) => list?.map((x) => (x.id === m.id ? { ...x, reaction_out: emoji || null, reaction_out_pending: true } : x)));
+      }
+      const { error } = await getSupabase().rpc('message_react', { p_message: m.id, p_emoji: emoji });
+      if (error) toast.error(errorMessage(error));
+      for (const k of [...(optimisticKey && error ? [optimisticKey] : []), ...(invalidate ?? [])]) qc.invalidateQueries({ queryKey: k });
+    },
+    [qc, optimisticKey, invalidate],
+  );
+}
+
+function ReactionPicker({ m, onReact, side }: { m: Message; onReact: ReactHandler; side: 'left' | 'right' }) {
+  const [open, setOpen] = React.useState(false);
   return (
-    <div className={cn('flex', out ? 'justify-end' : 'justify-start')}>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="React"
+          className={cn(
+            'shrink-0 rounded-full p-1 text-subtle transition-opacity hover:bg-surface-2 hover:text-foreground focus-visible:opacity-100',
+            open ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+          )}
+        >
+          <SmilePlus className="size-4" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="top" align={side === 'left' ? 'end' : 'start'} className="flex gap-0.5 rounded-full p-1">
+        {WA_REACTIONS.map((e) => (
+          <button
+            key={e}
+            type="button"
+            aria-label={`React ${e}`}
+            className={cn('rounded-full p-1.5 text-lg leading-none transition-transform hover:scale-125 hover:bg-surface-2', m.reaction_out === e && 'bg-primary-soft')}
+            onClick={() => {
+              setOpen(false);
+              onReact(m, m.reaction_out === e ? '' : e);
+            }}
+          >
+            {e}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export function MessageBubble({ m, showCampaign, onReact }: { m: Message; showCampaign?: boolean; onReact?: ReactHandler }) {
+  const out = m.direction === 'out';
+  const canReact = Boolean(onReact && m.wa_message_id && m.status !== 'failed');
+  const hasReactions = Boolean(m.reaction_in || m.reaction_out);
+  return (
+    <div className={cn('group flex items-center gap-1', out ? 'justify-end' : 'justify-start', hasReactions && 'pb-3')}>
+      {out && canReact && <ReactionPicker m={m} onReact={onReact!} side="left" />}
       <div
         className={cn(
-          'max-w-[78%] rounded-2xl px-3 py-2 text-[13.5px] leading-relaxed shadow-sm',
+          'relative max-w-[78%] rounded-2xl px-3 py-2 text-[13.5px] leading-relaxed shadow-sm',
           out ? 'rounded-br-md bg-[#d9fdd3] text-[#111b21] dark:bg-[#144d37] dark:text-[#e9edef]' : 'rounded-bl-md border border-border bg-surface text-foreground',
           m.status === 'failed' && 'ring-1 ring-danger/50',
         )}
@@ -82,12 +142,34 @@ export function MessageBubble({ m, showCampaign }: { m: Message; showCampaign?: 
           {out && <MessageTicks status={m.status} className="size-3" />}
         </div>
         {m.status === 'failed' && m.error && <div className="mt-1 text-[11px] text-danger">{m.error}</div>}
+        {hasReactions && (
+          <div className={cn('absolute -bottom-3.5 flex items-center gap-0.5 rounded-full border border-border bg-surface px-1.5 py-0.5 text-[13px] leading-none shadow-sm', out ? 'right-2' : 'left-2')}>
+            {m.reaction_in && (
+              <Tooltip content="Lead reacted">
+                <span>{m.reaction_in}</span>
+              </Tooltip>
+            )}
+            {m.reaction_out && (
+              <Tooltip content={m.reaction_out_pending ? 'Sending your reaction…' : onReact ? 'You reacted · click to remove' : 'You reacted'}>
+                <button
+                  type="button"
+                  disabled={!onReact}
+                  onClick={() => onReact?.(m, '')}
+                  className={cn('leading-none', m.reaction_out_pending && 'opacity-50', !onReact && 'cursor-default')}
+                >
+                  {m.reaction_out}
+                </button>
+              </Tooltip>
+            )}
+          </div>
+        )}
       </div>
+      {!out && canReact && <ReactionPicker m={m} onReact={onReact!} side="right" />}
     </div>
   );
 }
 
-export function MessageThread({ messages, className, emptyHint }: { messages: Message[]; className?: string; emptyHint?: React.ReactNode }) {
+export function MessageThread({ messages, className, emptyHint, onReact }: { messages: Message[]; className?: string; emptyHint?: React.ReactNode; onReact?: ReactHandler }) {
   const endRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
@@ -113,7 +195,7 @@ export function MessageThread({ messages, className, emptyHint }: { messages: Me
                 <span className="rounded-md bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-muted shadow-sm">{format(new Date(m.created_at), 'EEE, d MMM yyyy')}</span>
               </div>
             )}
-            <MessageBubble m={m} showCampaign />
+            <MessageBubble m={m} showCampaign onReact={onReact} />
           </React.Fragment>
         );
       })}

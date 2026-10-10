@@ -5,7 +5,7 @@
 import type { LeadSocials } from '@batsols/shared';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36';
-const EMAIL_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,24}/gi;
+const EMAIL_RE = /[a-z0-9._+-]+@[a-z0-9.-]+\.[a-z]{2,24}/gi;
 const BAD_EMAIL = /\.(png|jpe?g|gif|webp|svg|css|js)$|@(example|sentry|wixpress|sentry-next|domain|email)\.|^(your|name|user|test)@|godaddy|cloudflare/i;
 
 const SOCIAL_PATTERNS: Array<[keyof LeadSocials, RegExp]> = [
@@ -35,7 +35,11 @@ async function fetchText(url: string, timeoutMs = 8000): Promise<string | null> 
 }
 
 export function extractEmails(html: string, siteHost?: string): string[] {
-  const decoded = html.replace(/&#64;|&commat;|\[at\]|\(at\)/gi, '@').replace(/mailto:/gi, ' ');
+  const decoded = html
+    .replace(/&#64;|&commat;|%40|\[at\]|\(at\)/gi, '@')
+    // URL-encoded characters in mailto links (e.g. "mailto:%20info@…") must not glue onto the address.
+    .replace(/%[0-9a-f]{2}/gi, ' ')
+    .replace(/mailto:/gi, ' ');
   const found = new Set<string>();
   for (const m of decoded.matchAll(EMAIL_RE)) {
     const e = m[0].toLowerCase().replace(/^[^a-z0-9]+/, '').replace(/[.]+$/, '');
