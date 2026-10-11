@@ -6,7 +6,7 @@
 import { createServer } from 'node:http';
 import { config } from './config';
 import { log } from './log';
-import { every, errMsg } from './util';
+import { every, errMsg, worker } from './util';
 import { acquireLease, releaseLease, renewLease } from './lease';
 import { SessionManager } from './wa/manager';
 import { getMessage, handleUpdates, handleUpsert, onReply } from './messaging/inbound';
@@ -14,7 +14,8 @@ import { processOutbox, processReactions, recoverStuckMessages } from './messagi
 import { CampaignRunner } from './campaigns/runner';
 import { ScrapeWorker } from './scraper/worker';
 import { JobsWorker } from './jobs/worker';
-import { processAutomationQueue, processNoReply, runAutomations } from './automations/runner';
+import { cleanupAutomationQueue, processAutomationQueue, processNoReply, runAutomations } from './automations/runner';
+import { listenForSignals } from './signals';
 import { browserAvailable } from './scraper/browser';
 
 async function main() {
@@ -51,19 +52,42 @@ async function main() {
   await recoverStuckMessages();
 
   const onErr = (what: string) => (e: unknown) => log.error({ err: errMsg(e) }, `${what} failed`);
+  // Work loops wake instantly on database signals; the intervals are only a
+  // safety net, so an idle engine barely touches the database.
+  const reconcile = worker(() => manager.reconcile(), onErr('session reconcile'), { every: 30_000 });
+  const outbox = worker(() => processOutbox(manager), onErr('outbox'), { every: 20_000, initialDelay: 2_000 });
+  const reactions = worker(() => processReactions(manager), onErr('reactions'), { every: 60_000, initialDelay: 3_000 });
+  const scrapes = worker(() => scraper.tick(), onErr('scraper'), { every: 30_000, initialDelay: 3_000 });
+  const engineJobs = worker(() => jobs.tick(), onErr('jobs'), { every: 30_000, initialDelay: 3_000 });
+  const automationQueue = worker(() => processAutomationQueue(), onErr('automation queue'), { every: 30_000, initialDelay: 5_000 });
+  manager.onSettled = () => reconcile.wake();
+
+  const stopSignals = listenForSignals({
+    accounts: () => reconcile.wake(),
+    connected: () => {
+      outbox.wake();
+      reactions.wake();
+      campaigns.invalidate();
+    },
+    outbox: () => outbox.wake(),
+    reactions: () => reactions.wake(),
+    campaigns: () => campaigns.invalidate(),
+    scrape: () => scrapes.wake(),
+    jobs: () => engineJobs.wake(),
+    automation: () => automationQueue.wake(),
+  });
+
   const stops = [
-    every(3_000, () => manager.reconcile(), onErr('session reconcile')),
+    stopSignals,
+    ...[reconcile, outbox, reactions, scrapes, engineJobs, automationQueue].map((w) => w.stop),
+    // Cheap when idle: only touches the database when a message is due (cached otherwise).
+    every(2_000, () => campaigns.tick(), onErr('campaigns'), 4_000),
     every(60_000, () => manager.watchdog(), onErr('session watchdog'), 30_000),
     every(30 * 60_000, () => manager.refreshLimits(), onErr('limits refresh'), 5 * 60_000),
-    every(2_000, () => processOutbox(manager), onErr('outbox'), 2_000),
-    every(2_000, () => processReactions(manager), onErr('reactions'), 3_000),
-    every(2_000, () => campaigns.tick(), onErr('campaigns'), 4_000),
     every(5 * 60_000, () => campaigns.recoverStuck(), onErr('campaign recovery'), 5 * 60_000),
     every(5 * 60_000, () => recoverStuckMessages(), onErr('message recovery'), 5 * 60_000),
-    every(4_000, () => scraper.tick(), onErr('scraper'), 3_000),
-    every(4_000, () => jobs.tick(), onErr('jobs'), 3_000),
-    every(3_000, () => processAutomationQueue(), onErr('automation queue'), 5_000),
     every(10 * 60_000, () => processNoReply(), onErr('no-reply automations'), 60_000),
+    every(60 * 60_000, () => cleanupAutomationQueue(), onErr('automation queue cleanup'), 10 * 60_000),
   ];
 
   // Lease heartbeat: if another instance ever takes over, stop at once so two

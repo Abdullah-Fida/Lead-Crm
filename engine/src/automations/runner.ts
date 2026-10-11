@@ -190,7 +190,10 @@ export async function processAutomationQueue() {
       log.warn({ err: errMsg(e) }, 'queued automation failed'),
     );
   }
-  // Keep the queue small.
+}
+
+/** Keep the queue small (hourly). */
+export async function cleanupAutomationQueue() {
   await db.from('automation_queue').delete().lt('processed_at', new Date(Date.now() - 7 * 86400_000).toISOString());
 }
 

@@ -12,6 +12,9 @@ import { WaSession, type AccountInfo, type SessionHooks } from './session';
 export class SessionManager {
   private sessions = new Map<string, WaSession>();
   private busy = new Set<string>();
+  private missed = false;
+  /** Called when a reconcile skipped a busy number and that work has now finished. */
+  onSettled: (() => void) | null = null;
   private hooks: SessionHooks;
 
   constructor(handlers: {
@@ -47,7 +50,10 @@ export class SessionManager {
 
     for (const a of data ?? []) {
       seen.add(a.id);
-      if (this.busy.has(a.id)) continue;
+      if (this.busy.has(a.id)) {
+        this.missed = true; // look again once the current task finishes
+        continue;
+      }
       const info: AccountInfo = {
         id: a.id,
         workspace_id: a.workspace_id,
@@ -120,7 +126,13 @@ export class SessionManager {
     this.busy.add(id);
     fn()
       .catch((e) => log.error({ acc: id, err: errMsg(e) }, 'session task failed'))
-      .finally(() => this.busy.delete(id));
+      .finally(() => {
+        this.busy.delete(id);
+        if (this.missed && !this.busy.size) {
+          this.missed = false;
+          this.onSettled?.();
+        }
+      });
   }
 
   async watchdog() {

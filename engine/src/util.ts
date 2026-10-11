@@ -20,6 +20,50 @@ export function every(ms: number, fn: () => Promise<void>, onError: (e: unknown)
   };
 }
 
+/**
+ * Like `every`, but `wake()` runs it right away (used with database signals so
+ * idle polling can be slow). Never runs twice at once; a wake during a run
+ * schedules one more run straight after.
+ */
+export function worker(fn: () => Promise<void>, onError: (e: unknown) => void, opts: { every: number; initialDelay?: number }) {
+  let stopped = false;
+  let running = false;
+  let again = false;
+  let timer: NodeJS.Timeout | null = null;
+  const schedule = (ms: number) => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(run, ms);
+  };
+  const run = async () => {
+    if (stopped) return;
+    if (running) {
+      again = true;
+      return;
+    }
+    running = true;
+    again = false;
+    try {
+      await fn();
+    } catch (e) {
+      onError(e);
+    }
+    running = false;
+    if (!stopped) schedule(again ? 0 : opts.every);
+  };
+  schedule(opts.initialDelay ?? 0);
+  return {
+    wake: () => {
+      if (stopped) return;
+      if (running) again = true;
+      else schedule(25);
+    },
+    stop: () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    },
+  };
+}
+
 /** Serialises async work per key (e.g. per WhatsApp account). */
 export class KeyedQueue {
   private tails = new Map<string, Promise<unknown>>();

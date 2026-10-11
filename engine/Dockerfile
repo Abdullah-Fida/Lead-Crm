@@ -2,8 +2,7 @@
 # The Playwright image ships Chromium + system deps for the browser scraper.
 FROM mcr.microsoft.com/playwright:v1.63.0-noble
 
-ENV NODE_ENV=production \
-    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 WORKDIR /app
@@ -12,11 +11,13 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/shared/package.json packages/shared/
 COPY engine/package.json engine/
-RUN npm ci --workspace=@batsols/engine --workspace=@batsols/shared --include-workspace-root=false --no-audit --no-fund
+# --include=dev: the bundler (esbuild) is a dev dependency.
+RUN npm ci --workspace=@batsols/engine --workspace=@batsols/shared --include-workspace-root=false --include=dev --no-audit --no-fund
 
 COPY packages/shared packages/shared
 COPY engine engine
 RUN npm run build -w @batsols/engine
 
+ENV NODE_ENV=production
 USER pwuser
 CMD ["node", "engine/dist/index.js"]

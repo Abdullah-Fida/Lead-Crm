@@ -84,6 +84,22 @@ npm run dev          # web on http://localhost:3000 + engine
 
 Sign up — the first account creates your workspace. Then connect a WhatsApp number under **WhatsApp numbers**.
 
+## Deploy on one server (Oracle Cloud Always Free, or any Ubuntu VM)
+
+Runs the dashboard, the engine and automatic HTTPS (Caddy) with Docker Compose. A free Oracle Ampere VM
+(4 OCPU / 24 GB) handles 20+ WhatsApp numbers plus the Google Maps lead finder.
+
+1. **Supabase**: new project → SQL Editor → paste the output of `deploy/supabase-schema.sh` → Run
+   (or `supabase link` + `supabase db push`). Set *Authentication → URL configuration → Site URL* to your app URL.
+2. **Server**: Ubuntu 24.04, ports 80 and 443 open in the cloud firewall (Oracle: subnet security list).
+3. Copy `deploy/oracle/.env.example` to `deploy/oracle/.env` and fill it in. No domain? Use
+   `DOMAIN=<ip-with-dashes>.sslip.io`.
+4. From this folder: `deploy/oracle/deploy.sh <server-ip> <ssh-key-file>` — installs Docker on the first run,
+   uploads the code, builds and starts everything. Run it again to deploy updates; WhatsApp numbers reconnect
+   by themselves.
+
+Logs: `ssh ubuntu@<ip> 'cd batsols && sudo docker compose -f deploy/oracle/docker-compose.yml logs -f engine'`
+
 ## Deploy (Supabase + Render)
 
 1. **Supabase**: create a project, then from this folder run
@@ -102,7 +118,7 @@ Keep the service-role key secret: it bypasses row-level security and is only use
 ## Tests
 
 ```bash
-npm run test:db                 # 85 database tests: schema, RLS isolation, roles, sharing, reports (PGlite)
+npm run test:db                 # 91 database tests: schema, RLS isolation, roles, sharing, reports (PGlite)
 npm test -w @batsols/shared     # templating, spintax, phone numbers, sending windows
 npm run typecheck
 ```

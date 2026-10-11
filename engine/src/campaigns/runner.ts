@@ -4,6 +4,10 @@
  * message — honouring sending windows, warm-up, daily caps, random delays,
  * batch pauses and stop-on-reply. Numbers send one message at a time and
  * share their pace and daily limit across campaigns.
+ *
+ * Ticks are frequent but cheap: campaign rows, steps and senders are cached
+ * (refreshed by the 'campaigns' database signal or after a while), and nothing
+ * touches the database while every number is pausing between messages.
  */
 import {
   buildTemplateVars,
@@ -52,17 +56,51 @@ export class CampaignRunner {
   private variantTurn = new Map<string, number>(); // campaign -> round-robin variant counter
   private notes = new Map<string, string | null>(); // campaign -> last status note written
 
+  // Caches that keep idle ticks off the database (Supabase egress).
+  private running: Campaign[] = [];
+  private stale = true; // a 'campaigns' signal arrived: re-read on the next tick
+  private listedAt = 0;
+  private promotedAt = 0;
+  private sweptAt = 0;
+  private idleUntil = new Map<string, number>(); // campaign -> skip ticks until (ms)
+  private ctxCache = new Map<string, { version: string; at: number; ctx: Ctx }>();
+  private senderCache = new Map<string, { at: number; list: Array<{ account: WhatsappAccount; owner: Member | null }> }>();
+
   constructor(private manager: SessionManager) {}
 
   activeCount = 0;
 
+  /** Campaigns, recipients or numbers changed: re-read everything on the next tick. */
+  invalidate() {
+    this.stale = true;
+    this.idleUntil.clear();
+    this.ctxCache.clear();
+    this.senderCache.clear();
+  }
+
   async tick() {
-    await this.promoteScheduled();
-    await this.sweepCancelled();
-    const { data: running, error } = await db.from('campaigns').select('*').eq('status', 'running');
-    if (error) throw new Error(`campaigns load failed: ${error.message}`);
-    this.activeCount = running?.length ?? 0;
-    for (const c of running ?? []) {
+    const now = Date.now();
+    const refresh = this.stale || now - this.listedAt > 60_000;
+    if (refresh || now - this.promotedAt > 30_000) {
+      this.promotedAt = now;
+      await this.promoteScheduled();
+    }
+    if (this.stale || now - this.sweptAt > 5 * 60_000) {
+      this.sweptAt = now;
+      await this.sweepCancelled();
+    }
+    if (refresh) {
+      this.stale = false; // before the read, so a signal arriving during it isn't lost
+      const { data: running, error } = await db.from('campaigns').select('*').eq('status', 'running');
+      if (error) {
+        this.stale = true;
+        throw new Error(`campaigns load failed: ${error.message}`);
+      }
+      this.running = running ?? [];
+      this.listedAt = now;
+      this.activeCount = this.running.length;
+    }
+    for (const c of this.running) {
       try {
         await this.runCampaign(c);
       } catch (e) {
@@ -100,10 +138,21 @@ export class CampaignRunner {
   private async note(c: Campaign, text: string | null) {
     if (this.notes.get(c.id) === text && c.paused_reason === text) return;
     this.notes.set(c.id, text);
-    if (c.paused_reason !== text) await db.from('campaigns').update({ paused_reason: text }).eq('id', c.id);
+    if (c.paused_reason !== text) {
+      await db.from('campaigns').update({ paused_reason: text }).eq('id', c.id);
+      c.paused_reason = text; // keep the cached row in step
+    }
   }
 
   private async context(c: Campaign): Promise<Ctx | null> {
+    const hit = this.ctxCache.get(c.id);
+    if (hit && hit.version === c.updated_at && Date.now() - hit.at < 5 * 60_000) return { ...hit.ctx, campaign: c };
+    const ctx = await this.loadContext(c);
+    if (ctx) this.ctxCache.set(c.id, { version: c.updated_at, at: Date.now(), ctx });
+    return ctx;
+  }
+
+  private async loadContext(c: Campaign): Promise<Ctx | null> {
     const ws = await getWorkspace(c.workspace_id);
     if (!ws) return null;
     const { data: steps } = await db.from('campaign_steps').select('*').eq('campaign_id', c.id).order('position');
@@ -124,6 +173,8 @@ export class CampaignRunner {
       .eq('id', c.id)
       .eq('status', 'running')
       .select('id');
+    this.running = this.running.filter((x) => x.id !== c.id);
+    this.activeCount = this.running.length;
     if (!updated?.length) return;
     const { data: stats } = await db.from('campaign_stats').select('*').eq('campaign_id', c.id).maybeSingle();
     await this.event(c.workspace_id, c.id, 'completed', `Campaign finished: ${stats?.sent ?? 0} sent, ${stats?.replied ?? 0} replied`);
@@ -135,8 +186,16 @@ export class CampaignRunner {
     });
   }
 
-  /** Which of the campaign's numbers may send right now, with their owners. */
+  /** Which of the campaign's numbers may send right now, with their owners (cached for 30 s). */
   private async senders(c: Campaign): Promise<Array<{ account: WhatsappAccount; owner: Member | null }>> {
+    const hit = this.senderCache.get(c.id);
+    if (hit && Date.now() - hit.at < 30_000) return hit.list.filter((s) => this.manager.openSession(s.account.id));
+    const list = await this.loadSenders(c);
+    this.senderCache.set(c.id, { at: Date.now(), list });
+    return list;
+  }
+
+  private async loadSenders(c: Campaign): Promise<Array<{ account: WhatsappAccount; owner: Member | null }>> {
     if (!c.account_ids?.length) return [];
     const [{ data: accounts }, { data: members }, { data: grants }] = await Promise.all([
       db.from('whatsapp_accounts').select('*').in('id', c.account_ids).eq('workspace_id', c.workspace_id),
@@ -181,6 +240,11 @@ export class CampaignRunner {
   }
 
   private async runCampaign(c: Campaign) {
+    const nowMs = Date.now();
+    if ((this.idleUntil.get(c.id) ?? 0) > nowMs) return;
+    // Every number is mid-send or pausing between messages: nothing to do yet.
+    if (c.account_ids?.length && c.account_ids.every((id) => this.busy.has(id) || (this.nextAt.get(id) ?? 0) > nowMs)) return;
+
     const ctx = await this.context(c);
     if (!ctx) return;
     if (!ctx.steps.length) {
@@ -188,29 +252,23 @@ export class CampaignRunner {
       return;
     }
 
-    const { count: open } = await db
-      .from('campaign_recipients')
-      .select('id', { count: 'exact', head: true })
-      .eq('campaign_id', c.id)
-      .in('status', ['pending', 'waiting', 'sending']);
-    if (!open) {
-      await this.complete(c);
-      return;
-    }
-
     const now = new Date();
     if (!isWithinWindow(now, ctx.settings.window)) {
       await this.note(c, 'Outside sending hours');
+      this.idleUntil.set(c.id, nowMs + 60_000);
       return;
     }
 
     const senders = await this.senders(c);
     if (!senders.length) {
       await this.note(c, c.account_ids?.length ? 'Waiting for a connected WhatsApp number' : 'Choose at least one WhatsApp number to send from');
+      this.idleUntil.set(c.id, nowMs + 15_000);
       return;
     }
 
     let limited = 0;
+    let attempted = 0;
+    let claimedAny = false;
     for (const { account, owner } of senders) {
       if (this.busy.has(account.id)) continue;
       if ((this.nextAt.get(account.id) ?? 0) > Date.now()) continue;
@@ -232,10 +290,12 @@ export class CampaignRunner {
         continue;
       }
 
+      attempted++;
       const { data: claimed, error } = await db.rpc('claim_next_recipient', { p_campaign: c.id, p_account: account.id });
       if (error) throw new Error(`claim failed: ${error.message}`);
       const r = (claimed as CampaignRecipient[] | null)?.[0];
       if (!r) continue;
+      claimedAny = true;
 
       this.busy.add(account.id);
       void this.processRecipient(ctx, account, owner, r)
@@ -243,7 +303,23 @@ export class CampaignRunner {
         .finally(() => this.busy.delete(account.id));
     }
 
-    await this.note(c, limited === senders.length ? 'Daily sending limit reached · continues tomorrow' : null);
+    if (limited === senders.length) {
+      await this.note(c, 'Daily sending limit reached · continues tomorrow');
+      this.idleUntil.set(c.id, nowMs + 5 * 60_000);
+      return;
+    }
+    await this.note(c, null);
+
+    // Nobody was due: either everyone is done, or follow-ups are still waiting.
+    if (attempted > 0 && !claimedAny) {
+      const { count: open } = await db
+        .from('campaign_recipients')
+        .select('id', { count: 'exact', head: true })
+        .eq('campaign_id', c.id)
+        .in('status', ['pending', 'waiting', 'sending']);
+      if (!open) await this.complete(c);
+      else this.idleUntil.set(c.id, nowMs + 30_000);
+    }
   }
 
   private memberCache = new Map<string, { at: number; n: number }>();
