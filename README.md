@@ -43,7 +43,10 @@ legacy/, server/, Whatsapp Automation/   the old prototype (no longer used — s
 
 **Lead finder (Google Maps)**
 - Google Places API (recommended) or headless-browser scraping
-- Keywords × locations, results per search, live progress and log, stop anytime
+- Keywords × locations in **any country, city or area** (looked up on OpenStreetMap), live progress and log, stop anytime
+- **Deep search**: covers each place map area by area (closer in where it's busy) and remembers searched areas for 90 days,
+  so running a search again finds new businesses instead of the same ones; businesses already saved are skipped while loading
+- Admins only by default (members need the “Use the lead finder” permission)
 - **Qualifier**: minimum rating/reviews, mobile only, skip closed businesses, with/without website, excluded words
 - Website enrichment: emails, Instagram, Facebook, LinkedIn…; auto-tagging and owner assignment
 
@@ -56,7 +59,8 @@ legacy/, server/, Whatsapp Automation/   the old prototype (no longer used — s
 - Live monitor: funnel, activity log, recipients, A/B results, per-sender breakdown, add leads, retry failed, export
 
 **Inbox, templates, tasks, automations, reports**
-- Shared inbox across all numbers with unread counts, assignment, archive and lead context; emoji reactions both ways
+- Shared inbox across all numbers with **a folder per teammate and per team**, Today / Yesterday dividers, the sender's name on
+  every message, unread counts, assignment, archive and lead context; emoji reactions both ways
   (see a lead’s 👍, react back from the dashboard)
 - Template library (team or personal) with preview against real leads and quality checks
 - Tasks (to-do, call, meeting, follow-up) with assignees and due dates

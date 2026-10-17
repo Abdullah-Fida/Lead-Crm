@@ -18,15 +18,8 @@ export function LogoMark({ className }: { className?: string }) {
       </defs>
       <rect width="32" height="32" rx="8.5" fill={`url(#${id}-bg)`} />
       <rect width="32" height="32" rx="8.5" fill={`url(#${id}-sheen)`} />
-      <path
-        d="M11 23.5V8.5h5.6a3.6 3.6 0 0 1 0 7.2H11m0 0h6.4a3.9 3.9 0 0 1 0 7.8H11"
-        fill="none"
-        stroke="#fff"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="23.6" cy="9.4" r="1.7" fill="#a5f3fc" />
+      <path d="M20.8 10.25A7.5 7.5 0 1 0 20.8 21.75" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" />
+      <circle cx="16" cy="16" r="2.4" fill="#a5f3fc" />
     </svg>
   );
 }
@@ -37,7 +30,7 @@ export function Logo({ className, compact }: { className?: string; compact?: boo
       <LogoMark className="size-7" />
       {!compact && (
         <span className="text-[15.5px] font-semibold tracking-[-0.02em]">
-          Bat<span className="text-muted">Sols</span>
+          Core<span className="text-muted">Nexa</span>
         </span>
       )}
     </span>

@@ -17,6 +17,24 @@ export interface PlaceResult {
   businessStatus: string | null;
 }
 
+/** A result card as first seen in Google's list, before its details are read. */
+export interface CardRef {
+  href: string;
+  placeId: string | null;
+  phone: string | null;
+}
+
+export interface SearchOutcome {
+  /** New businesses (not already saved), up to the requested number. */
+  places: PlaceResult[];
+  /** Businesses Google listed, including already-saved ones. */
+  listed: number;
+  /** Listed businesses that were already saved (skipped). */
+  known: number;
+  /** Google's list ended (versus: we stopped because we had enough new ones). */
+  exhausted: boolean;
+}
+
 export interface QualifyRules {
   min_rating?: number;
   min_reviews?: number;

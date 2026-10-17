@@ -237,9 +237,18 @@ export type ScrapeJob = {
   created_by: UUID | null;
   name: string;
   provider: 'places' | 'browser';
+  /** ISO country the search runs in (null: the workspace's country). */
+  country: string | null;
   keywords: string[];
   locations: string[];
   queries: string[];
+  /** standard: one Google search per keyword × location · deep: zone by zone across each location's map area. */
+  depth: 'standard' | 'deep';
+  /** Deep: at most this many map zones per keyword × location in one run (null: no limit). */
+  area_limit: number | null;
+  /** Deep: search zones again even if they were searched in the last 90 days. */
+  recheck: boolean;
+  /** Standard: results per search · deep: new businesses per map zone. */
   max_per_query: number;
   enrich: boolean;
   tags: string[];
@@ -255,6 +264,20 @@ export type ScrapeJob = {
   finished_at: Timestamp | null;
   created_at: Timestamp;
   updated_at: Timestamp;
+};
+
+/** A map zone (or standard search) already searched for a keyword — the engine's memory for deep searches. */
+export type ScrapeCoverage = {
+  workspace_id: UUID;
+  keyword: string;
+  /** Map tile "zoom/x/y", or "q:<query>" for a standard search. */
+  zone: string;
+  area: string;
+  found: number;
+  fresh: number;
+  dense: boolean;
+  job_id: UUID | null;
+  searched_at: Timestamp;
 };
 
 export type LeadSocials = {
@@ -279,6 +302,8 @@ export type Lead = {
   email: string | null;
   website: string | null;
   has_website: boolean;
+  /** "example.com", derived from website. */
+  website_domain: string | null;
   address: string | null;
   city: string | null;
   country: string | null;
@@ -473,7 +498,19 @@ export type Conversation = {
   last_direction: 'in' | 'out' | null;
   unread_count: number;
   archived: boolean;
+  /** Teammates in the chat: the number's owner and everyone who sent a message (inbox folders). */
+  member_ids: UUID[];
+  /** Who sent the latest outgoing message. */
+  last_sender_id: UUID | null;
   created_at: Timestamp;
+};
+
+/** Inbox folder counts (inbox_folders): all chats (id null), then one row per teammate and per team. */
+export type InboxFolderCount = {
+  kind: 'all' | 'member' | 'team';
+  id: UUID | null;
+  conversations: number;
+  unread: number;
 };
 
 export type Message = {
@@ -540,16 +577,32 @@ export type EngineStatus = {
   info: { sessions?: number; connected?: number; campaigns?: number; scraping?: boolean; browser?: boolean };
 };
 
+export type WebsiteKind = 'site' | 'none' | 'social' | 'invalid';
+
 /** Filters understood by public.filtered_leads(). */
 export type LeadFilters = {
   q?: string;
   stage_ids?: UUID[];
   has_website?: boolean;
+  /** site: a real website · none: no website · social: only a social page · invalid: broken link · no_site: anything but a real website */
+  website?: WebsiteKind | 'no_site';
+  /** Business name contains. */
+  name?: string;
+  /** Website domain contains. */
+  domain?: string;
   cities?: string[];
+  /** ISO codes. */
+  countries?: string[];
   categories?: string[];
   tags?: string[];
   owner_ids?: UUID[];
   unassigned?: boolean;
+  /** Added (scraped / imported / created) by. */
+  created_by_ids?: UUID[];
+  /** never: in no campaign yet · any: in at least one campaign */
+  campaign?: 'never' | 'any';
+  campaign_ids?: UUID[];
+  exclude_campaign_ids?: UUID[];
   wa_status?: Lead['wa_status'][];
   phone_types?: Lead['phone_type'][];
   sources?: LeadSource[];
@@ -711,6 +764,36 @@ export type AccountHealth = {
 
 export type ChatOverviewRow = { channel_id: UUID; unread: number; mentions: number; last_message_at: Timestamp | null };
 
+/** public.lead_inventory(): the team's lead bank. */
+export type LeadInventory = {
+  totals: {
+    total: number;
+    new_24h: number;
+    new_7d: number;
+    scraped: number;
+    in_campaigns: number;
+    available: number;
+    contacted: number;
+    replied: number;
+    with_site: number;
+    without_site: number;
+    countries: number;
+  };
+  by_member: Array<{ user_id: UUID; count: number; new_7d: number; last_added: Timestamp }>;
+  by_country: Array<{ code: string; count: number }>;
+  recent_jobs: Array<{
+    id: UUID;
+    name: string;
+    created_by: UUID | null;
+    status: ScrapeJob['status'];
+    country: string | null;
+    created_at: Timestamp;
+    finished_at: Timestamp | null;
+    inserted: number;
+    duplicates: number;
+  }>;
+};
+
 export type DashboardOverview = {
   timezone: string;
   days: number;
@@ -742,6 +825,7 @@ export type TeamPerformanceRow = {
 
 export type LeadFacets = {
   cities: Array<{ value: string; count: number }>;
+  countries: Array<{ value: string; count: number }>;
   categories: Array<{ value: string; count: number }>;
   tags: Array<{ value: string; count: number }>;
 };
@@ -783,6 +867,7 @@ export type Database = {
       workspace_integrations: TableDef<WorkspaceIntegrations, 'workspace_id'>;
       pipeline_stages: TableDef<PipelineStage, 'workspace_id' | 'name'>;
       scrape_jobs: TableDef<ScrapeJob, 'workspace_id'>;
+      scrape_coverage: TableDef<ScrapeCoverage, 'workspace_id' | 'keyword' | 'zone'>;
       leads: TableDef<Lead, 'workspace_id' | 'business_name'>;
       lead_notes: TableDef<LeadNote, 'workspace_id' | 'lead_id' | 'body'>;
       tasks: TableDef<
@@ -856,6 +941,7 @@ export type Database = {
         SetofOptions: { from: '*'; to: 'leads'; isOneToOne: false; isSetofReturn: true };
       };
       lead_facets: { Args: { p_workspace: string }; Returns: LeadFacets };
+      lead_inventory: { Args: { p_workspace: string }; Returns: LeadInventory };
       leads_bulk_action: {
         Args: { p_workspace: string; p_action: string; p_ids?: string[] | null; p_filters?: LeadFilters | null; p_value?: unknown };
         Returns: number;
@@ -892,6 +978,7 @@ export type Database = {
       report_teams: { Args: { p_workspace: string; p_from: string; p_to: string }; Returns: TeamReportRow[] };
       report_campaign_senders: { Args: { p_workspace: string; p_from: string; p_to: string; p_campaign?: string | null }; Returns: CampaignSenderRow[] };
       report_daily: { Args: { p_workspace: string; p_from: string; p_to: string }; Returns: DailyReportRow[] };
+      inbox_folders: { Args: { p_workspace: string }; Returns: InboxFolderCount[] };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

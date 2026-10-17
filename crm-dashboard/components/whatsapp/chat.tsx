@@ -10,9 +10,9 @@ import { Button } from '@/components/ui/button';
 import { NativeSelect } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger, Tooltip } from '@/components/ui/menu';
 import { getSupabase } from '@/lib/supabase/client';
-import { qk, useEngineStatus, useUsableAccounts } from '@/lib/queries';
+import { qk, useAccounts, useEngineStatus, useMembers, useUsableAccounts } from '@/lib/queries';
 import { useWorkspace } from '@/lib/workspace';
-import { cn, errorMessage, fullDate } from '@/lib/utils';
+import { cn, dayLabel, errorMessage, fullDate } from '@/lib/utils';
 import { format, isSameDay } from 'date-fns';
 
 export function MessageTicks({ status, className }: { status: Message['status']; className?: string }) {
@@ -58,6 +58,42 @@ function MediaChip({ m }: { m: Message }) {
 }
 
 const WA_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
+/**
+ * Names who sent each outgoing message: the teammate who typed it, the campaign
+ * (and who runs it), or the number's owner when it was sent from the phone.
+ */
+export function useSenderOf(messages: Message[]) {
+  const { userId } = useWorkspace();
+  const { byId: members } = useMembers();
+  const { byId: accounts } = useAccounts();
+  const campaignIds = React.useMemo(() => [...new Set(messages.map((m) => m.campaign_id).filter((id): id is string => !!id))].sort(), [messages]);
+  const { data: campaigns } = useQuery({
+    queryKey: ['campaign-names', campaignIds],
+    enabled: campaignIds.length > 0,
+    queryFn: async () => {
+      const { data } = await getSupabase().from('campaigns').select('id, name, created_by').in('id', campaignIds);
+      return new Map((data ?? []).map((c) => [c.id, c]));
+    },
+    staleTime: 5 * 60_000,
+  });
+  return React.useCallback(
+    (m: Message): string | null => {
+      if (m.direction !== 'out') return null;
+      const name = (id: string | null | undefined) =>
+        !id ? null : id === userId ? 'You' : members.get(id)?.profile.full_name || members.get(id)?.profile.email || 'Former teammate';
+      if (m.sent_by) return name(m.sent_by);
+      if (m.campaign_id) {
+        const c = campaigns?.get(m.campaign_id);
+        const by = name(c?.created_by);
+        return c ? `Campaign “${c.name}”${by ? ` · ${by}` : ''}` : 'Campaign';
+      }
+      const owner = m.account_id ? accounts.get(m.account_id)?.owner_id : null;
+      return owner ? `${name(owner)} · from the phone` : null;
+    },
+    [userId, members, accounts, campaigns],
+  );
+}
 
 export type ReactHandler = (m: Message, emoji: string) => void;
 
@@ -114,7 +150,8 @@ function ReactionPicker({ m, onReact, side }: { m: Message; onReact: ReactHandle
   );
 }
 
-export function MessageBubble({ m, showCampaign, onReact }: { m: Message; showCampaign?: boolean; onReact?: ReactHandler }) {
+/** sender: who sent an outgoing message (“You”, “Ali”, “Campaign “Promo” · Ali”), shown on the bubble. */
+export function MessageBubble({ m, showCampaign, onReact, sender }: { m: Message; showCampaign?: boolean; onReact?: ReactHandler; sender?: string | null }) {
   const out = m.direction === 'out';
   const canReact = Boolean(onReact && m.wa_message_id && m.status !== 'failed');
   const hasReactions = Boolean(m.reaction_in || m.reaction_out);
@@ -128,10 +165,11 @@ export function MessageBubble({ m, showCampaign, onReact }: { m: Message; showCa
           m.status === 'failed' && 'ring-1 ring-danger/50',
         )}
       >
+        {out && sender && <div className="mb-0.5 text-[11px] font-semibold text-[#027eb5] dark:text-[#53bdeb]">{sender}</div>}
         <MediaChip m={m} />
         {m.body && <div className="whitespace-pre-wrap break-words">{m.body}</div>}
         <div className={cn('mt-1 flex items-center justify-end gap-1.5 text-[10.5px]', out ? 'text-[#667781] dark:text-[#8696a0]' : 'text-subtle')}>
-          {showCampaign && m.campaign_id && (
+          {showCampaign && m.campaign_id && !sender && (
             <span className="inline-flex items-center gap-0.5">
               <Sparkles className="size-2.5" /> campaign
             </span>
@@ -169,7 +207,20 @@ export function MessageBubble({ m, showCampaign, onReact }: { m: Message; showCa
   );
 }
 
-export function MessageThread({ messages, className, emptyHint, onReact }: { messages: Message[]; className?: string; emptyHint?: React.ReactNode; onReact?: ReactHandler }) {
+export function MessageThread({
+  messages,
+  className,
+  emptyHint,
+  onReact,
+  senderOf,
+}: {
+  messages: Message[];
+  className?: string;
+  emptyHint?: React.ReactNode;
+  onReact?: ReactHandler;
+  /** Names the sender of outgoing messages (shown on each bubble). */
+  senderOf?: (m: Message) => string | null;
+}) {
   const endRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
@@ -191,11 +242,13 @@ export function MessageThread({ messages, className, emptyHint, onReact }: { mes
         return (
           <React.Fragment key={m.id}>
             {newDay && (
-              <div className="flex justify-center py-2">
-                <span className="rounded-md bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-muted shadow-sm">{format(new Date(m.created_at), 'EEE, d MMM yyyy')}</span>
+              <div className="sticky top-0 z-10 flex justify-center py-2">
+                <Tooltip content={format(new Date(m.created_at), 'EEEE, d MMMM yyyy')}>
+                  <span className="rounded-md border border-border bg-surface px-2.5 py-1 text-[11px] font-semibold text-muted shadow-sm">{dayLabel(m.created_at)}</span>
+                </Tooltip>
               </div>
             )}
-            <MessageBubble m={m} showCampaign onReact={onReact} />
+            <MessageBubble m={m} showCampaign onReact={onReact} sender={senderOf?.(m)} />
           </React.Fragment>
         );
       })}

@@ -2,6 +2,7 @@
  * Google Places API (New) — Text Search. Reliable and ToS-compliant; returns up
  * to 60 results per query (3 pages of 20).
  */
+import type { Bbox } from './areas';
 import type { PlaceResult } from './types';
 
 const FIELDS = [
@@ -66,9 +67,25 @@ function toResult(p: ApiPlace): PlaceResult {
   };
 }
 
-export async function searchPlaces(apiKey: string, query: string, max: number, opts: { regionCode?: string; isCancelled?: () => Promise<boolean> } = {}): Promise<PlaceResult[]> {
+/**
+ * Text Search, up to `max` results (Google stops at 60). `within` restricts results to a map
+ * rectangle (deep search zones). `exhausted`: Google had no more results.
+ */
+export async function searchPlaces(
+  apiKey: string,
+  query: string,
+  max: number,
+  opts: { regionCode?: string; within?: Bbox; isCancelled?: () => Promise<boolean> } = {},
+): Promise<{ places: PlaceResult[]; exhausted: boolean }> {
   const out: PlaceResult[] = [];
   let pageToken: string | undefined;
+  const area = opts.within
+    ? {
+        locationRestriction: {
+          rectangle: { low: { latitude: opts.within.south, longitude: opts.within.west }, high: { latitude: opts.within.north, longitude: opts.within.east } },
+        },
+      }
+    : {};
   for (let page = 0; page < 3 && out.length < max; page++) {
     const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST',
@@ -78,6 +95,7 @@ export async function searchPlaces(apiKey: string, query: string, max: number, o
         pageSize: Math.min(20, max - out.length),
         languageCode: 'en',
         ...(opts.regionCode ? { regionCode: opts.regionCode } : {}),
+        ...area,
         ...(pageToken ? { pageToken } : {}),
       }),
       signal: AbortSignal.timeout(20_000),
@@ -95,5 +113,5 @@ export async function searchPlaces(apiKey: string, query: string, max: number, o
     if (opts.isCancelled && (await opts.isCancelled())) break;
     await new Promise((r) => setTimeout(r, 1200));
   }
-  return out.slice(0, max);
+  return { places: out.slice(0, max), exhausted: !pageToken };
 }

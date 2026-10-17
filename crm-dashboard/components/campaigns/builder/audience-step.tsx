@@ -3,13 +3,15 @@
 import * as React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Layers, MousePointerClick, ShieldCheck, Users } from 'lucide-react';
-import type { LeadFilters } from '@batsols/shared';
+import type { Lead, LeadFilters } from '@batsols/shared';
 import { FilterBar } from '@/components/leads/filter-bar';
 import { Card } from '@/components/ui/card';
 import { SwitchRow } from '@/components/ui/controls';
 import { Callout } from '@/components/ui/feedback';
 import { NativeSelect } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
+import { Table, Td, Th, Tr } from '@/components/ui/layout';
+import { PhoneText } from '@/components/leads/bits';
 import { getSupabase } from '@/lib/supabase/client';
 import { cleanFilters } from '@/lib/leads';
 import { useWorkspace } from '@/lib/workspace';
@@ -45,7 +47,7 @@ export function AudienceStep({ state, set, campaignId }: { state: BuilderState; 
     <div className="space-y-6">
       <div className="grid gap-3 sm:grid-cols-2">
         {[
-          { mode: 'filters' as const, icon: Layers, title: 'Leads matching filters', text: 'Pick by stage, city, category, tags, lists, quality…' },
+          { mode: 'filters' as const, icon: Layers, title: 'Leads matching filters', text: 'Pick by country, city, category, website, campaign history, who added them…' },
           {
             mode: 'selection' as const,
             icon: MousePointerClick,
@@ -132,6 +134,65 @@ export function AudienceStep({ state, set, campaignId }: { state: BuilderState; 
         )}
       </div>
       {count.data && count.data.eligible === 0 && <Callout tone="warning">No leads match yet. Loosen the filters, or add leads first.</Callout>}
+      {(count.data?.eligible ?? 0) > 0 && <AudiencePreview audience={a} skipLandlines={state.settings.skip_landlines} excludeCampaignId={campaignId} total={count.data!.eligible} />}
     </div>
+  );
+}
+
+/** The first leads that will receive the campaign, so you can check the filters before launching. */
+function AudiencePreview({ audience, skipLandlines, excludeCampaignId, total }: { audience: BuilderState['audience']; skipLandlines: boolean; excludeCampaignId?: string; total: number }) {
+  const { workspace } = useWorkspace();
+  const filters = cleanFilters({ ...effectiveFilters(audience, skipLandlines), ...(excludeCampaignId ? { exclude_campaign_id: excludeCampaignId } : {}) });
+  const preview = useQuery({
+    queryKey: ['audience-preview', workspace.id, filters],
+    queryFn: async () => {
+      const { data, error } = await getSupabase()
+        .rpc('filtered_leads', { p_workspace: workspace.id, p_filters: filters })
+        .select('id, business_name, phone, city, country, category, website_domain')
+        .order('score', { ascending: false })
+        .limit(15);
+      if (error) throw error;
+      return data as Array<Pick<Lead, 'id' | 'business_name' | 'phone' | 'city' | 'country' | 'category' | 'website_domain'>>;
+    },
+  });
+  return (
+    <Card className="overflow-hidden">
+      <div className="border-b border-border px-4 py-2.5 text-[13px] font-semibold">
+        Preview <span className="font-normal text-muted">· first {Math.min(15, total)} of {formatNumber(total)}</span>
+      </div>
+      {preview.isLoading ? (
+        <div className="flex justify-center p-6">
+          <Spinner />
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table>
+            <thead>
+              <tr>
+                <Th>Business</Th>
+                <Th>Phone</Th>
+                <Th>Location</Th>
+                <Th>Website</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {(preview.data ?? []).map((l) => (
+                <Tr key={l.id}>
+                  <Td className="max-w-[240px]">
+                    <div className="truncate font-medium">{l.business_name}</div>
+                    {l.category && <div className="truncate text-xs text-subtle">{l.category}</div>}
+                  </Td>
+                  <Td className="whitespace-nowrap">
+                    <PhoneText phone={l.phone} />
+                  </Td>
+                  <Td className="whitespace-nowrap text-muted">{[l.city, l.country].filter(Boolean).join(' · ') || '—'}</Td>
+                  <Td className="max-w-[180px] truncate text-muted">{l.website_domain ?? <span className="text-warning/90">none</span>}</Td>
+                </Tr>
+              ))}
+            </tbody>
+          </Table>
+        </div>
+      )}
+    </Card>
   );
 }

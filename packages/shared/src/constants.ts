@@ -111,3 +111,34 @@ export const COUNTRIES: Array<{ code: string; name: string; timezone: string }> 
 ];
 
 export const STAGE_COLORS = ['#64748b', '#3b82f6', '#06b6d4', '#8b5cf6', '#f59e0b', '#ec4899', '#10b981', '#ef4444', '#84cc16', '#f97316'];
+
+let countryList: Array<{ code: string; name: string }> | null = null;
+
+/** Every country (ISO code + English name), sorted by name — for pickers. */
+export function allCountries(): Array<{ code: string; name: string }> {
+  if (countryList) return countryList;
+  const dn = new Intl.DisplayNames(['en'], { type: 'region' });
+  const out: Array<{ code: string; name: string }> = [];
+  for (let i = 0; i < 26; i++)
+    for (let j = 0; j < 26; j++) {
+      const code = String.fromCharCode(65 + i, 65 + j);
+      try {
+        const name = dn.of(code);
+        // Skip unassigned codes and groupings ("EU", "UN", "Unknown Region").
+        if (name && name !== code && !/region|union|nations|outlying|^world$/i.test(name) && !['EZ', 'QO', 'XA', 'XB', 'ZZ'].includes(code)) out.push({ code, name });
+      } catch {
+        /* not a region */
+      }
+    }
+  return (countryList = out.sort((a, b) => a.name.localeCompare(b.name)));
+}
+
+/** "Pakistan" for "PK" (falls back to the code). */
+export function countryName(code: string | null | undefined): string {
+  if (!code) return '';
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'region' }).of(code.toUpperCase()) ?? code;
+  } catch {
+    return code;
+  }
+}

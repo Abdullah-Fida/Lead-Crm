@@ -16,6 +16,17 @@ export const config = {
   serviceRoleKey: required('SUPABASE_SERVICE_ROLE_KEY'),
   placesApiKey: process.env.GOOGLE_PLACES_API_KEY?.trim() || null,
   browserScraper: (process.env.SCRAPER_BROWSER ?? 'true').toLowerCase() !== 'false',
+  /** Nominatim (OpenStreetMap) server that turns lead-search locations into map areas. */
+  geocoderUrl: process.env.GEOCODER_URL?.trim() || 'https://nominatim.openstreetmap.org',
+  /** Optional contact address sent to the geocoder, as Nominatim's usage policy suggests. */
+  geocoderEmail: process.env.GEOCODER_EMAIL?.trim() || null,
+  /**
+   * 'all' (default): WhatsApp, campaigns, automations, jobs and lead searches.
+   * 'scraper': only Google Maps browser searches — run it next to an 'all' engine that
+   * has SCRAPER_BROWSER=false, e.g. on a second small server, so Chromium never
+   * competes with WhatsApp for memory.
+   */
+  role: process.env.ENGINE_ROLE === 'scraper' ? ('scraper' as const) : ('all' as const),
   logLevel: process.env.LOG_LEVEL ?? 'info',
   port: process.env.PORT ? Number(process.env.PORT) : null,
   instanceId: process.env.ENGINE_INSTANCE_ID || `${hostname()}-${randomUUID().slice(0, 8)}`,

@@ -82,7 +82,7 @@ export default function GeneralSettingsPage() {
     <div className="space-y-6">
       {disabled && <Callout tone="info">Only owners and admins can change workspace settings.</Callout>}
       <Card>
-        <CardHeader title="Workspace" description="Name, region and defaults used across BatSols." />
+        <CardHeader title="Workspace" description="Name, region and defaults used across CoreNexa." />
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <Field label="Workspace name" htmlFor="name">
             <Input id="name" value={form.name} disabled={disabled} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -119,7 +119,7 @@ export default function GeneralSettingsPage() {
       </Card>
 
       <Card>
-        <CardHeader title="Automation & compliance" description="How BatSols reacts to sends and replies." />
+        <CardHeader title="Automation & compliance" description="How CoreNexa reacts to sends and replies." />
         <CardContent className="divide-y divide-border">
           <SwitchRow
             label="Move leads to “Contacted” after the first message"
@@ -136,9 +136,9 @@ export default function GeneralSettingsPage() {
             disabled={disabled}
           />
           <SwitchRow
-            label="Members see every lead"
-            description="Off (recommended for agencies): each member works in their own space and only sees their own leads plus lists, campaigns and numbers shared with them. On: everyone sees all leads."
-            checked={Boolean((form.settings as { members_see_all_leads?: boolean }).members_see_all_leads)}
+            label="Shared lead bank"
+            description="On (default): the whole team works one lead inventory — everyone sees every lead and what teammates already found, so nobody scrapes the same businesses twice. Off: each member only sees their own leads plus lists, campaigns and numbers shared with them."
+            checked={(form.settings as { members_see_all_leads?: boolean }).members_see_all_leads !== false}
             onCheckedChange={(v) => setForm((f) => ({ ...f, settings: { ...f.settings, members_see_all_leads: v } as typeof f.settings }))}
             disabled={disabled}
           />

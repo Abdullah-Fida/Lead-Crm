@@ -76,7 +76,7 @@ export function CommandPalette() {
 
   const actions = [
     can.write && { label: 'Add a lead', icon: Plus, href: '/leads?new=1', keywords: 'create new contact' },
-    can.write && { label: 'Find leads on Google Maps', icon: MapPin, href: '/scraper?new=1', keywords: 'scrape search' },
+    can.scrape && { label: 'Find leads on Google Maps', icon: MapPin, href: '/scraper?new=1', keywords: 'scrape search' },
     can.write && { label: 'New campaign', icon: Send, href: '/campaigns/new', keywords: 'create broadcast' },
     can.write && { label: 'Connect a WhatsApp number', icon: Smartphone, href: '/whatsapp?connect=1', keywords: 'qr scan link' },
     can.admin && { label: 'Invite a teammate', icon: UserPlus, href: '/settings/team?invite=1', keywords: 'member add user' },
@@ -85,7 +85,7 @@ export function CommandPalette() {
   const itemClass =
     'flex h-10 cursor-default items-center gap-3 rounded-lg px-3 text-[13.5px] text-foreground data-[selected=true]:bg-surface-2 [&_svg]:size-4 [&_svg]:text-muted';
 
-  const pages = ALL_NAV_ITEMS.filter((i) => match(`${i.label} ${i.keywords ?? ''}`));
+  const pages = ALL_NAV_ITEMS.filter((i) => (!i.requires || can[i.requires]) && match(`${i.label} ${i.keywords ?? ''}`));
   const shownActions = actions.filter((a) => match(`${a.label} ${a.keywords}`));
 
   return (

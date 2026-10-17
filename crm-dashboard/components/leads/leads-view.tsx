@@ -320,13 +320,15 @@ export function LeadsView() {
                       <EmptyState
                         icon={<Users />}
                         title="No leads yet"
-                        description="Find businesses on Google Maps, import a CSV, or add one by hand."
+                        description={can.scrape ? 'Find businesses on Google Maps, import a CSV, or add one by hand.' : 'Import a CSV, or add one by hand.'}
                         action={
                           can.write && (
                             <>
-                              <Button variant="primary" onClick={() => router.push('/scraper?new=1')}>
-                                <MapPin /> Find leads
-                              </Button>
+                              {can.scrape && (
+                                <Button variant="primary" onClick={() => router.push('/scraper?new=1')}>
+                                  <MapPin /> Find leads
+                                </Button>
+                              )}
                               <Button onClick={() => setDialog('import')}>
                                 <Upload /> Import CSV
                               </Button>
@@ -551,7 +553,10 @@ const LeadRow = React.memo(function LeadRow({
         </div>
       </Td>
       <Td className="max-w-[160px]">
-        <span className="truncate text-muted">{lead.city ?? '—'}</span>
+        <span className="truncate text-muted">
+          {lead.city ?? '—'}
+          {lead.country && <span className="text-subtle"> · {lead.country}</span>}
+        </span>
       </Td>
       <Td onClick={(e) => e.stopPropagation()}>
         <StageSelect value={lead.stage_id} onChange={(id) => onPatch({ stage_id: id })} disabled={!canWrite} />
@@ -575,7 +580,18 @@ const LeadRow = React.memo(function LeadRow({
       <Td className="whitespace-nowrap text-xs text-muted">
         {lead.last_replied_at ? <span className="font-medium text-success">Replied {timeAgo(lead.last_replied_at)}</span> : lead.last_contacted_at ? timeAgo(lead.last_contacted_at) : <span className="text-subtle">Never</span>}
       </Td>
-      <Td className="whitespace-nowrap text-xs text-subtle">{timeAgo(lead.created_at)}</Td>
+      <Td className="whitespace-nowrap text-xs text-subtle">
+        <AddedBy userId={lead.created_by} />
+        {timeAgo(lead.created_at)}
+      </Td>
     </Tr>
   );
 });
+
+/** Who added (scraped / imported / created) the lead. */
+function AddedBy({ userId }: { userId: string | null }) {
+  const { byId } = useMembers();
+  const m = userId ? byId.get(userId) : null;
+  if (!m) return null;
+  return <div className="max-w-[120px] truncate text-muted">{m.profile.full_name || m.profile.email}</div>;
+}

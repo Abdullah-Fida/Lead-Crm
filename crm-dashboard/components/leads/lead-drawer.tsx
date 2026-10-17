@@ -22,7 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { SOURCE_LABELS, formatPhone, type Activity, type Lead, type Task } from '@batsols/shared';
+import { SOURCE_LABELS, formatPhone, type Activity, type Lead, type Message, type Task } from '@batsols/shared';
 import { FacebookIcon, InstagramIcon, LinkedinIcon, WhatsAppIcon } from '@/components/brand';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -33,7 +33,7 @@ import { EmptyState, Skeleton, useConfirm } from '@/components/ui/feedback';
 import { Input, NativeSelect, Textarea } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Tooltip } from '@/components/ui/menu';
 import { TagInput } from '@/components/ui/multi-select';
-import { Composer, MessageThread, useReactToMessage } from '@/components/whatsapp/chat';
+import { Composer, MessageThread, useReactToMessage, useSenderOf } from '@/components/whatsapp/chat';
 import { LeadFormDialog } from './lead-form';
 import { LandlineBadge, OwnerSelect, PhoneText, Rating, StageSelect, WaStatus } from './bits';
 import { getSupabase } from '@/lib/supabase/client';
@@ -52,6 +52,8 @@ export function LeadDrawer({ leadId, onClose, initialTab = 'activity' }: { leadI
   );
 }
 
+const NO_MESSAGES: Message[] = [];
+
 function LeadPanel({ leadId, onClose, initialTab }: { leadId: string; onClose: () => void; initialTab: string }) {
   const { data: lead, isLoading } = useLead(leadId);
   const timeline = useLeadTimeline(leadId);
@@ -66,6 +68,7 @@ function LeadPanel({ leadId, onClose, initialTab }: { leadId: string; onClose: (
   useRealtime('messages', `lead_id=eq.${leadId}`, [qk.leadTimeline(leadId)]);
   const timelineKeys = React.useMemo(() => [qk.leadTimeline(leadId)], [leadId]);
   const react = useReactToMessage({ invalidate: timelineKeys });
+  const senderOf = useSenderOf(timeline.data?.messages ?? NO_MESSAGES);
 
   if (isLoading || !lead) {
     return (
@@ -239,6 +242,7 @@ function LeadPanel({ leadId, onClose, initialTab }: { leadId: string; onClose: (
             className="min-h-0 flex-1 bg-surface-2/40"
             emptyHint={lead.phone ? `Start the conversation with ${lead.business_name}.` : 'Add a phone number to message this lead.'}
             onReact={can.write ? react : undefined}
+            senderOf={senderOf}
           />
           <Composer lead={lead} defaultAccountId={lastAccount} />
         </TabsContent>
@@ -422,7 +426,7 @@ function Timeline({ items, loading, lead }: { items: TimelineItem[]; loading: bo
               <ArrowRightLeft className="size-3" />
             </span>
             <div className="pt-0.5 text-[13px] text-muted">
-              <span className="font-medium text-foreground">{a.actor_id ? name(a.actor_id) : 'BatSols'}</span> {activityText(a, name)}
+              <span className="font-medium text-foreground">{a.actor_id ? name(a.actor_id) : 'CoreNexa'}</span> {activityText(a, name)}
               <span className="text-subtle"> · {timeAgo(a.created_at)}</span>
             </div>
           </li>

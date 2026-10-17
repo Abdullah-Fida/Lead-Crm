@@ -23,6 +23,8 @@ export interface NavItem {
   badge?: 'inbox' | 'tasks' | 'chat';
   status?: 'whatsapp';
   keywords?: string;
+  /** Only shown to people with this permission. */
+  requires?: 'scrape';
 }
 
 export const NAV: Array<{ group: string | null; items: NavItem[] }> = [
@@ -41,7 +43,7 @@ export const NAV: Array<{ group: string | null; items: NavItem[] }> = [
       { href: '/leads', label: 'All leads', icon: Users, keywords: 'contacts businesses crm' },
       { href: '/pipeline', label: 'Pipeline', icon: KanbanSquare, keywords: 'kanban deals stages board' },
       { href: '/lists', label: 'Lead lists', icon: ListChecks, keywords: 'groups segments share duplicates merge' },
-      { href: '/scraper', label: 'Lead finder', icon: MapPin, keywords: 'scraper google maps search find' },
+      { href: '/scraper', label: 'Lead finder', icon: MapPin, keywords: 'scraper google maps search find', requires: 'scrape' },
     ],
   },
   {

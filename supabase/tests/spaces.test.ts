@@ -23,6 +23,8 @@ beforeAll(async () => {
   vik = await createUser(db, 'vik@agency.test', 'Vik Viewer');
   ws = (await asUser(db, admin, (tx) => one<{ id: string }>(tx, `select public.create_workspace('Agency') as id`))).id;
   await db.query(`insert into public.workspace_members (workspace_id, user_id, role) values ($1, $2, 'member'), ($1, $3, 'member'), ($1, $4, 'viewer')`, [ws, ali, bina, vik]);
+  // The shared lead bank is the default; these tests cover the private-spaces mode.
+  await db.query(`update public.workspaces set settings = settings || '{"members_see_all_leads": false}' where id = $1`, [ws]);
   aliLead = (await asUser(db, ali, (tx) => one<{ id: string }>(tx, `insert into public.leads (workspace_id, business_name, phone) values ($1, 'Ali Clinic', '923001000001') returning id`, [ws]))).id;
   binaLead = (await asUser(db, bina, (tx) => one<{ id: string }>(tx, `insert into public.leads (workspace_id, business_name, phone) values ($1, 'Bina Gym', '923001000002') returning id`, [ws]))).id;
   await asUser(db, admin, (tx) => tx.query(`insert into public.leads (workspace_id, business_name, phone) values ($1, 'Pool Lead', '923001000003')`, [ws]));
@@ -55,10 +57,10 @@ describe('personal lead spaces', () => {
     ).rejects.toThrow(/leads_ws_phone_key/);
   });
 
-  it('the workspace can opt into members seeing every lead', async () => {
-    await asUser(db, admin, (tx) => tx.query(`update public.workspaces set settings = settings || '{"members_see_all_leads": true}' where id = $1`, [ws]));
-    expect(await visibleLeads(ali)).toHaveLength(3);
+  it('the shared lead bank is the default; admins can switch to private spaces', async () => {
     await asUser(db, admin, (tx) => tx.query(`update public.workspaces set settings = settings - 'members_see_all_leads' where id = $1`, [ws]));
+    expect(await visibleLeads(ali)).toHaveLength(3);
+    await asUser(db, admin, (tx) => tx.query(`update public.workspaces set settings = settings || '{"members_see_all_leads": false}' where id = $1`, [ws]));
     expect(await visibleLeads(ali)).toHaveLength(1);
   });
 
@@ -171,8 +173,11 @@ describe('permissions & suspension', () => {
     await expect(
       asUser(db, ali, (tx) => tx.query(`insert into public.whatsapp_accounts (workspace_id, owner_id, label) values ($1, $2, 'Second')`, [ws, ali])),
     ).rejects.toThrow(/up to 1 WhatsApp/);
-    // Bina keeps the defaults
-    await asUser(db, bina, (tx) => tx.query(`insert into public.scrape_jobs (workspace_id, created_by, keywords) values ($1, $2, '{gyms}')`, [ws, bina]));
+    // Bina keeps the defaults: campaigns yes, the lead finder only when an admin allows it
+    await asUser(db, bina, (tx) => tx.query(`insert into public.campaigns (workspace_id, name, created_by) values ($1, 'Bina promo', $2)`, [ws, bina]));
+    await expect(
+      asUser(db, bina, (tx) => tx.query(`insert into public.scrape_jobs (workspace_id, created_by, keywords) values ($1, $2, '{gyms}')`, [ws, bina])),
+    ).rejects.toThrow(/row-level security/);
   });
 
   it('delete permission lets a member delete their own leads', async () => {

@@ -5,7 +5,7 @@
 import type { WAMessage, WAMessageKey, WAMessageUpdate, proto } from 'baileys';
 import { db } from '../db';
 import { log } from '../log';
-import { errMsg } from '../util';
+import { errMsg, sleep } from '../util';
 import { hasStoredSession } from './auth-state';
 import { WaSession, type AccountInfo, type SessionHooks } from './session';
 
@@ -78,11 +78,13 @@ export class SessionManager {
 
       if (a.desired_state === 'connected') {
         if (!existing || existing.phase === 'stopped') {
-          this.task(a.id, async () => {
-            const s = new WaSession(info, this.hooks);
-            this.sessions.set(a.id, s);
-            await s.start();
-          });
+          this.task(a.id, () =>
+            this.oneAtATime(async () => {
+              const s = new WaSession(info, this.hooks);
+              this.sessions.set(a.id, s);
+              await s.start();
+            }),
+          );
         }
       } else if (a.desired_state === 'disconnected') {
         if (existing && existing.phase !== 'stopped') {
@@ -120,6 +122,17 @@ export class SessionManager {
         });
       }
     }
+  }
+
+  private startChain: Promise<void> = Promise.resolve();
+  /** Start numbers one at a time, a few seconds apart: a burst of WhatsApp handshakes starves small servers. */
+  private oneAtATime(fn: () => Promise<void>): Promise<void> {
+    const run = this.startChain.then(fn);
+    this.startChain = run.then(
+      () => sleep(4000),
+      () => sleep(4000),
+    );
+    return run;
   }
 
   private task(id: string, fn: () => Promise<void>) {

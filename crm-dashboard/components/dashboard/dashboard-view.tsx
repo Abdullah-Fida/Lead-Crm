@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Segmented } from '@/components/ui/controls';
 import { Skeleton } from '@/components/ui/feedback';
 import { StatCard } from '@/components/ui/layout';
+import { LeadBank } from './lead-bank';
 import { getSupabase } from '@/lib/supabase/client';
 import { qk, useAccounts } from '@/lib/queries';
 import { useWorkspace } from '@/lib/workspace';
@@ -61,7 +62,7 @@ export function DashboardView() {
 
   const checklist = [
     { done: accounts.length > 0, label: 'Connect a WhatsApp number', href: '/whatsapp?connect=1', icon: Smartphone },
-    { done: (d?.leads.total ?? 0) > 0, label: 'Find or import leads', href: '/scraper?new=1', icon: MapPin },
+    { done: (d?.leads.total ?? 0) > 0, label: can.scrape ? 'Find or import leads' : 'Import or add leads', href: can.scrape ? '/scraper?new=1' : '/leads', icon: MapPin },
     { done: (extras.data?.templates ?? 0) > 0, label: 'Write a message template', href: '/templates', icon: FileText },
     { done: (extras.data?.campaigns ?? 0) > 0, label: 'Launch your first campaign', href: '/campaigns/new', icon: Send },
     ...(can.admin ? [{ done: (extras.data?.members ?? 0) > 1, label: 'Add your team', href: '/settings/team?invite=1', icon: UserPlus }] : []),
@@ -113,6 +114,8 @@ export function DashboardView() {
           </div>
         </Card>
       )}
+
+      <LeadBank />
 
       {isLoading || !d ? (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

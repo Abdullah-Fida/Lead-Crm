@@ -3,8 +3,17 @@
 # deploy.sh runs this automatically the first time; it is safe to run again.
 set -euo pipefail
 
+# Small servers (e.g. 1 GB micro): add swap so short memory spikes don't kill anything.
+if [ "$(awk '/MemTotal/ {print $2}' /proc/meminfo)" -lt 3000000 ] && ! swapon --show | grep -q /swapfile; then
+  echo "→ Adding 2 GB swap"
+  sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile >/dev/null && sudo swapon /swapfile
+  grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
+  echo 'vm.swappiness=10' | sudo tee /etc/sysctl.d/99-batsols-swap.conf >/dev/null && sudo sysctl -q --system
+fi
+
 if ! command -v docker >/dev/null 2>&1; then
   echo "→ Installing Docker"
+  command -v curl >/dev/null 2>&1 || { sudo apt-get update -qq && sudo apt-get install -y -qq curl; }
   curl -fsSL https://get.docker.com | sudo sh
 fi
 sudo usermod -aG docker "$USER"

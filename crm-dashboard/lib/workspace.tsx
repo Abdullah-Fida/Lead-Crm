@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { canWrite, isAdminRole, type Profile, type Role, type Workspace } from '@batsols/shared';
+import { canWrite, isAdminRole, type MemberPermissions, type Profile, type Role, type Workspace } from '@batsols/shared';
 
 export interface WorkspaceSummary {
   id: string;
@@ -15,11 +15,14 @@ export interface SessionData {
   profile: Profile;
   workspace: Workspace;
   role: Role;
+  /** This member's permissions in the workspace (see member_can in the database). */
+  permissions: MemberPermissions;
   workspaces: WorkspaceSummary[];
 }
 
 interface WorkspaceContextValue extends SessionData {
-  can: { write: boolean; admin: boolean; owner: boolean };
+  /** scrape: may use the lead finder — admins, and members an admin allowed. */
+  can: { write: boolean; admin: boolean; owner: boolean; scrape: boolean };
   setWorkspace: (w: Workspace) => void;
   setProfile: (p: Profile) => void;
 }
@@ -39,7 +42,12 @@ export function WorkspaceProvider({ initial, children }: { initial: SessionData;
       ...initial,
       workspace,
       profile,
-      can: { write: canWrite(initial.role), admin: isAdminRole(initial.role), owner: initial.role === 'owner' },
+      can: {
+        write: canWrite(initial.role),
+        admin: isAdminRole(initial.role),
+        owner: initial.role === 'owner',
+        scrape: isAdminRole(initial.role) || (initial.role === 'member' && initial.permissions.scrape === true),
+      },
       setWorkspace,
       setProfile,
     }),

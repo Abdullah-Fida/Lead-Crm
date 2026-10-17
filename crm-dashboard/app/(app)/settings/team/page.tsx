@@ -42,7 +42,7 @@ function useMemberRows() {
 const PERMS: Array<{ key: keyof MemberPermissions; label: string; description: string; def: boolean }> = [
   { key: 'connect_whatsapp', label: 'Connect WhatsApp numbers', description: 'Link their own numbers', def: true },
   { key: 'create_campaigns', label: 'Create campaigns', description: 'Start their own campaigns', def: true },
-  { key: 'scrape', label: 'Use the lead finder', description: 'Run Google Maps searches', def: true },
+  { key: 'scrape', label: 'Use the lead finder', description: 'See and run Google Maps lead searches (admins only by default)', def: false },
   { key: 'import', label: 'Import leads', description: 'Upload CSV files', def: true },
   { key: 'export', label: 'Export leads', description: 'Download lead CSVs', def: true },
   { key: 'delete_leads', label: 'Delete leads', description: 'Delete leads they own', def: false },
@@ -304,7 +304,7 @@ function AddMemberDialog({ open, onOpenChange, onDone, teams }: { open: boolean;
     setResult({ email: form.email, password: body.password ?? null });
     onDone();
   }
-  const loginText = result ? `BatSols login\n${typeof window !== 'undefined' ? window.location.origin : ''}/login\nEmail: ${result.email}${result.password ? `\nPassword: ${result.password}` : ''}` : '';
+  const loginText = result ? `CoreNexa login\n${typeof window !== 'undefined' ? window.location.origin : ''}/login\nEmail: ${result.email}${result.password ? `\nPassword: ${result.password}` : ''}` : '';
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="md" title="Add a team member" description="They get their own space to connect WhatsApp and run campaigns.">
@@ -312,7 +312,7 @@ function AddMemberDialog({ open, onOpenChange, onDone, teams }: { open: boolean;
           <>
             <DialogBody className="space-y-3">
               <Callout tone="success" title="Member added">
-                {result.password ? 'Share these login details with them. They can change the password in their profile.' : 'They already had a BatSols account and can sign in with it.'}
+                {result.password ? 'Share these login details with them. They can change the password in their profile.' : 'They already had a CoreNexa account and can sign in with it.'}
               </Callout>
               <pre className="rounded-lg bg-surface-2 p-3 font-mono text-[12.5px]">{loginText}</pre>
             </DialogBody>

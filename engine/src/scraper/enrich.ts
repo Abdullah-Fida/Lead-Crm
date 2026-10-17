@@ -5,7 +5,8 @@
 import type { LeadSocials } from '@batsols/shared';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36';
-const EMAIL_RE = /[a-z0-9._+-]+@[a-z0-9.-]+\.[a-z]{2,24}/gi;
+// Bounded runs: an unbounded pattern can take minutes on a huge page full of long tokens.
+const EMAIL_RE = /[a-z0-9._+-]{1,64}@[a-z0-9.-]{1,253}\.[a-z]{2,24}/gi;
 const BAD_EMAIL = /\.(png|jpe?g|gif|webp|svg|css|js)$|@(example|sentry|wixpress|sentry-next|domain|email)\.|^(your|name|user|test)@|godaddy|cloudflare/i;
 
 const SOCIAL_PATTERNS: Array<[keyof LeadSocials, RegExp]> = [
@@ -28,7 +29,7 @@ async function fetchText(url: string, timeoutMs = 8000): Promise<string | null> 
     const type = res.headers.get('content-type') ?? '';
     if (!type.includes('html')) return null;
     const text = await res.text();
-    return text.slice(0, 1_500_000);
+    return text.slice(0, 600_000);
   } catch {
     return null;
   }

@@ -5,7 +5,7 @@ import { Spinner } from './spinner';
 
 const variants = {
   primary:
-    'bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover active:translate-y-px [box-shadow:inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(0,0,0,0.12)]',
+    'bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover [box-shadow:inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(0,0,0,0.12)]',
   secondary: 'bg-surface text-foreground border border-border shadow-sm hover:bg-surface-2 hover:border-border-strong',
   soft: 'bg-primary-soft text-primary hover:bg-primary-soft-border/50',
   ghost: 'text-muted hover:text-foreground hover:bg-surface-2',
@@ -42,7 +42,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
     <Comp
       ref={ref}
       className={cn(
-        'inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap font-medium transition-[background-color,border-color,color,opacity,transform] duration-150 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0',
+        // active:scale — every button visibly reacts to a press.
+        'inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap font-medium transition-[background-color,border-color,color,opacity,transform] duration-150 active:scale-[0.96] disabled:pointer-events-none disabled:opacity-50 motion-reduce:active:scale-100 [&_svg]:size-4 [&_svg]:shrink-0',
         variants[variant],
         sizes[size],
         className,

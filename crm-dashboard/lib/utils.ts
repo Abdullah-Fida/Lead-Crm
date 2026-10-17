@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { formatDistanceToNowStrict, format, isToday, isYesterday, isThisYear } from 'date-fns';
+import { differenceInCalendarDays, formatDistanceToNowStrict, format, isToday, isYesterday, isThisYear } from 'date-fns';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -40,6 +40,17 @@ export function shortDate(date: string | Date | null | undefined) {
   if (isToday(d)) return format(d, 'HH:mm');
   if (isYesterday(d)) return 'Yesterday';
   if (isThisYear(d)) return format(d, 'd MMM');
+  return format(d, 'd MMM yyyy');
+}
+
+/** Day separator: Today / Yesterday / Monday (past week) / Mon, 3 Oct / 3 Oct 2025 */
+export function dayLabel(date: string | Date | null | undefined) {
+  if (!date) return 'Earlier';
+  const d = new Date(date);
+  if (isToday(d)) return 'Today';
+  if (isYesterday(d)) return 'Yesterday';
+  if (differenceInCalendarDays(new Date(), d) < 7) return format(d, 'EEEE');
+  if (isThisYear(d)) return format(d, 'EEE, d MMM');
   return format(d, 'd MMM yyyy');
 }
 

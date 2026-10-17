@@ -25,7 +25,7 @@ export function LeadFormDialog({
   lead?: Lead | null;
   onSaved?: (lead: Lead) => void;
 }) {
-  const { workspace, userId } = useWorkspace();
+  const { workspace, userId, can } = useWorkspace();
   const { stages } = useStages();
   const { members } = useMembers();
   const facets = useLeadFacets();
@@ -87,7 +87,7 @@ export function LeadFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="lg" title={lead ? 'Edit lead' : 'Add a lead'} description={lead ? undefined : 'Add a business by hand. Use the Lead finder to pull them from Google Maps in bulk.'}>
+      <DialogContent size="lg" title={lead ? 'Edit lead' : 'Add a lead'} description={lead ? undefined : can.scrape ? 'Add a business by hand. Use the Lead finder to pull them from Google Maps in bulk.' : 'Add a business by hand.'}>
         <form
           className="contents"
           onSubmit={(e) => {

@@ -188,6 +188,12 @@
     from { background-position: -400px 0; }
     to { background-position: 400px 0; }
   }
+  @keyframes nav-progress {
+    from { transform: scaleX(0.04); }
+    12% { transform: scaleX(0.38); }
+    45% { transform: scaleX(0.72); }
+    to { transform: scaleX(0.95); }
+  }
   @keyframes pulse-ring {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.45; }
@@ -266,6 +272,10 @@
     background-clip: text;
     color: transparent;
   }
+  .nav-progress {
+    transform-origin: left center;
+    animation: nav-progress 10s cubic-bezier(0.08, 0.6, 0.2, 1) forwards;
+  }
   .skeleton {
     background-image: linear-gradient(90deg, var(--surface-2) 0px, var(--surface-3) 120px, var(--surface-2) 240px);
     background-size: 800px 100%;
@@ -282,5 +292,12 @@
       linear-gradient(to right, var(--grid) 1px, transparent 1px),
       linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
     background-size: 32px 32px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-progress {
+    animation: none;
+    transform: scaleX(0.7);
   }
 }

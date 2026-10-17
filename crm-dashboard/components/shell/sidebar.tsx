@@ -1,11 +1,11 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
+import Link, { useLinkStatus } from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useTheme } from 'next-themes';
-import { Check, ChevronsUpDown, LogOut, Monitor, Moon, Plus, Sun, UserRound } from 'lucide-react';
+import { Check, ChevronsUpDown, LoaderCircle, LogOut, Monitor, Moon, Plus, Sun, UserRound } from 'lucide-react';
 import { ROLE_LABELS } from '@batsols/shared';
 import { Logo } from '@/components/brand';
 import { Avatar } from '@/components/ui/avatar';
@@ -71,6 +71,13 @@ function useShellCounts() {
   return { inbox: inbox.data ?? 0, tasks: tasks.data ?? 0, chat: chat.data ?? 0 };
 }
 
+/** The item's icon, swapped for a spinner while its page is opening. */
+function NavIcon({ icon: Icon, active }: { icon: NavItem['icon']; active: boolean }) {
+  const { pending } = useLinkStatus();
+  if (pending) return <LoaderCircle className="size-4 shrink-0 animate-spin text-primary" />;
+  return <Icon className={cn('size-4 shrink-0', active ? 'text-primary' : 'text-subtle group-hover:text-muted')} />;
+}
+
 function NavLink({ item, counts, waState, onNavigate }: { item: NavItem; counts: { inbox: number; tasks: number; chat: number }; waState: 'ok' | 'warn' | 'none'; onNavigate?: () => void }) {
   const pathname = usePathname();
   const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -85,7 +92,7 @@ function NavLink({ item, counts, waState, onNavigate }: { item: NavItem; counts:
         active ? 'bg-surface text-foreground shadow-sm ring-1 ring-border' : 'text-muted hover:bg-surface-2/70 hover:text-foreground',
       )}
     >
-      <Icon className={cn('size-4 shrink-0', active ? 'text-primary' : 'text-subtle group-hover:text-muted')} />
+      <NavIcon icon={Icon} active={active} />
       <span className="truncate">{item.label}</span>
       {badge > 0 && (
         <span
@@ -216,7 +223,7 @@ function EngineIndicator() {
 export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const counts = useShellCounts();
   const { accounts } = useAccounts();
-  const { userId } = useWorkspace();
+  const { userId, can } = useWorkspace();
   const mine = accounts.filter((a) => a.owner_id === userId);
   const waState: 'ok' | 'warn' | 'none' = !mine.length ? 'none' : mine.every((a) => a.status === 'connected') ? 'ok' : 'warn';
 
@@ -230,9 +237,11 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         {NAV.map((g, i) => (
           <div key={g.group ?? i} className="space-y-0.5">
             {g.group && <div className="px-2.5 pb-1 text-[11px] font-medium uppercase tracking-wider text-subtle">{g.group}</div>}
-            {g.items.map((item) => (
-              <NavLink key={item.href} item={item} counts={counts} waState={waState} onNavigate={onNavigate} />
-            ))}
+            {g.items
+              .filter((item) => !item.requires || can[item.requires])
+              .map((item) => (
+                <NavLink key={item.href} item={item} counts={counts} waState={waState} onNavigate={onNavigate} />
+              ))}
           </div>
         ))}
       </nav>

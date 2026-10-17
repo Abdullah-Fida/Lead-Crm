@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { SidebarContent } from './sidebar';
 import { NotificationsBell } from './notifications';
 import { CommandPalette, openCommandPalette } from './command-palette';
+import { NavProgress } from './nav-progress';
 
 function QuickCreate() {
   const router = useRouter();
@@ -28,9 +29,11 @@ function QuickCreate() {
         <DropdownMenuItem onSelect={() => router.push('/leads?new=1')}>
           <Plus /> Lead
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => router.push('/scraper?new=1')}>
-          <MapPin /> Lead search (Google Maps)
-        </DropdownMenuItem>
+        {can.scrape && (
+          <DropdownMenuItem onSelect={() => router.push('/scraper?new=1')}>
+            <MapPin /> Lead search (Google Maps)
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onSelect={() => router.push('/campaigns/new')}>
           <Send /> Campaign
         </DropdownMenuItem>
@@ -52,6 +55,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
+      <React.Suspense fallback={null}>
+        <NavProgress />
+      </React.Suspense>
       <aside className="hidden w-[248px] shrink-0 lg:block">
         <SidebarContent />
       </aside>

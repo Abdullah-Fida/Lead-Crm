@@ -1,10 +1,11 @@
 /**
- * BatSols engine: WhatsApp sessions, campaign runner, outbox, lead searches,
+ * CoreNexa engine: WhatsApp sessions, campaign runner, outbox, lead searches,
  * background jobs and automations. Stateless apart from the database — safe
  * to restart at any time.
  */
 import { createServer } from 'node:http';
 import { config } from './config';
+import { db } from './db';
 import { log } from './log';
 import { every, errMsg, worker } from './util';
 import { acquireLease, releaseLease, renewLease } from './lease';
@@ -19,7 +20,7 @@ import { listenForSignals } from './signals';
 import { browserAvailable } from './scraper/browser';
 
 async function main() {
-  log.info({ instance: config.instanceId, version: config.version }, 'BatSols engine starting');
+  log.info({ instance: config.instanceId, version: config.version }, 'CoreNexa engine starting');
 
   // Health = "process is up". It must NOT wait for the lease: on a Render web
   // service the old instance is only stopped (and releases the lease) once the
@@ -31,6 +32,8 @@ async function main() {
       res.end(JSON.stringify({ ok: true, active, instance: config.instanceId }));
     }).listen(config.port, () => log.info({ port: config.port }, 'health endpoint listening'));
   }
+
+  if (config.role === 'scraper') return runScraperOnly(() => (active = true));
 
   await acquireLease();
   active = true;
@@ -134,6 +137,58 @@ async function main() {
   process.on('unhandledRejection', (e) => log.error({ err: errMsg(e) }, 'unhandled rejection'));
   process.on('uncaughtException', (e) => log.error({ err: errMsg(e) }, 'uncaught exception'));
   log.info('engine running');
+}
+
+/**
+ * ENGINE_ROLE=scraper: only Google Maps browser searches. No WhatsApp and no
+ * lease, so it runs next to the main engine (e.g. on the dashboard's server).
+ */
+async function runScraperOnly(markActive: () => void) {
+  if (!(await browserAvailable())) {
+    log.fatal('Chromium is not available — the scraper-only engine needs it');
+    process.exit(1);
+  }
+  markActive();
+  const scraper = new ScrapeWorker();
+  await scraper.recover();
+  const onErr = (what: string) => (e: unknown) => log.error({ err: errMsg(e) }, `${what} failed`);
+  const scrapes = worker(() => scraper.tick(), onErr('scraper'), { every: 30_000, initialDelay: 2_000 });
+  const noop = () => undefined;
+  const stopSignals = listenForSignals({
+    scrape: () => scrapes.wake(),
+    accounts: noop,
+    connected: noop,
+    outbox: noop,
+    reactions: noop,
+    campaigns: noop,
+    jobs: noop,
+    automation: noop,
+  });
+  // Lets Settings → Integrations show that Google Maps search is available.
+  const beat = () =>
+    db.from('engine_status').upsert({ id: 'scraper', version: config.version, heartbeat_at: new Date().toISOString(), info: { browser: true, scraping: Boolean(scraper.running) } });
+  const heartbeat = every(30_000, async () => void (await beat()), onErr('scraper heartbeat'));
+  // Last line of defence: a search that makes no progress for 20 minutes means something is stuck
+  // beyond the per-step time limits. Exit; Docker restarts the engine and the search resumes.
+  const watchdog = setInterval(() => {
+    if (scraper.running && Date.now() - scraper.lastActivity > 20 * 60_000) {
+      log.fatal({ job: scraper.running }, 'lead search stalled — restarting the scraper');
+      process.exit(1);
+    }
+  }, 60_000);
+
+  const shutdown = (reason: string) => {
+    log.info({ reason }, 'shutting down');
+    stopSignals();
+    scrapes.stop();
+    heartbeat();
+    clearInterval(watchdog);
+    setTimeout(() => process.exit(0), 500);
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('unhandledRejection', (e) => log.error({ err: errMsg(e) }, 'unhandled rejection'));
+  log.info('scraper-only engine running (Google Maps browser searches)');
 }
 
 main().catch((e) => {

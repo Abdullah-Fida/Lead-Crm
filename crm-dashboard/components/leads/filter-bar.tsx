@@ -1,8 +1,10 @@
 'use client';
 
 import * as React from 'react';
-import { Building2, Filter, Flame, ListChecks, MapPin, Search, SlidersHorizontal, Tag as TagIcon, Target, UserRound, X } from 'lucide-react';
-import { LEAD_SOURCES, SOURCE_LABELS, type LeadFilters } from '@batsols/shared';
+import { Bookmark, Building2, Filter, Flame, Flag, Globe, ListChecks, MapPin, Megaphone, Search, SlidersHorizontal, Tag as TagIcon, Target, Trash2, UserPlus, UserRound, X } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { LEAD_SOURCES, SOURCE_LABELS, countryName, type LeadFilters, type SavedView } from '@batsols/shared';
 import { WhatsAppIcon } from '@/components/brand';
 import { Button } from '@/components/ui/button';
 import { Field, Input, NativeSelect } from '@/components/ui/input';
@@ -10,6 +12,18 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/menu';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { useLeadFacets, useMembers, useStages } from '@/lib/queries';
 import { useLeadLists } from '@/lib/lists';
+import { useCampaigns } from '@/lib/campaigns';
+import { getSupabase } from '@/lib/supabase/client';
+import { useWorkspace } from '@/lib/workspace';
+import { errorMessage } from '@/lib/utils';
+
+const WEBSITE_OPTIONS: Array<{ value: NonNullable<LeadFilters['website']>; label: string }> = [
+  { value: 'site', label: 'Has a real website' },
+  { value: 'no_site', label: 'No real website' },
+  { value: 'none', label: 'No website at all' },
+  { value: 'social', label: 'Only a social media page' },
+  { value: 'invalid', label: 'Broken / invalid website' },
+];
 
 export function countActiveFilters(f: LeadFilters) {
   return Object.entries(f).filter(([k, v]) => k !== 'q' && v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length) && !(k === 'unassigned' && !v)).length;
@@ -56,7 +70,7 @@ export function FilterBar({
             </button>
           ) : undefined
         }
-        placeholder="Search name, phone, city, email…"
+        placeholder="Search name, phone, website, city…"
         value={q}
         onChange={(e) => setQ(e.target.value)}
       />
@@ -76,6 +90,22 @@ export function FilterBar({
         value={filters.cities ?? []}
         onChange={(v) => set({ cities: v })}
         emptyText="No cities yet"
+      />
+      <MultiSelect
+        label="Country"
+        icon={<Flag />}
+        options={(facets.data?.countries ?? []).map((c) => ({ value: c.value, label: countryName(c.value), count: c.count }))}
+        value={filters.countries ?? []}
+        onChange={(v) => set({ countries: v })}
+        emptyText="No countries yet"
+      />
+      <MultiSelect
+        label="Website"
+        icon={<Globe />}
+        single
+        options={WEBSITE_OPTIONS}
+        value={filters.website ? [filters.website] : []}
+        onChange={(v) => set({ website: (v[0] as LeadFilters['website']) || undefined })}
       />
       <MultiSelect
         label="Category"
@@ -103,6 +133,24 @@ export function FilterBar({
         />
       )}
       <MultiSelect
+        label="Added by"
+        icon={<UserPlus />}
+        options={members.map((m) => ({ value: m.user_id, label: m.profile.full_name || m.profile.email }))}
+        value={filters.created_by_ids ?? []}
+        onChange={(v) => set({ created_by_ids: v })}
+      />
+      <MultiSelect
+        label="Campaigns"
+        icon={<Megaphone />}
+        single
+        options={[
+          { value: 'never', label: 'Never in a campaign' },
+          { value: 'any', label: 'Already in a campaign' },
+        ]}
+        value={filters.campaign ? [filters.campaign] : []}
+        onChange={(v) => set({ campaign: (v[0] as LeadFilters['campaign']) || undefined })}
+      />
+      <MultiSelect
         label="Quality"
         icon={<Flame />}
         options={[
@@ -126,6 +174,7 @@ export function FilterBar({
         onChange={(v) => set({ wa_status: v as LeadFilters['wa_status'] })}
       />
       <MoreFilters filters={filters} onChange={onChange} />
+      <SavedFilters filters={filters} onChange={onChange} />
       {active > 0 && (
         <Button variant="ghost" size="sm" onClick={() => onChange({ q: filters.q })}>
           <X /> Clear {active}
@@ -137,7 +186,19 @@ export function FilterBar({
 
 function MoreFilters({ filters, onChange }: { filters: LeadFilters; onChange: (f: LeadFilters) => void }) {
   const set = (patch: Partial<LeadFilters>) => onChange({ ...filters, ...patch });
-  const count = [filters.min_rating, filters.min_reviews, filters.contacted, filters.has_email, filters.sources?.length, filters.phone_types?.length, filters.has_phone].filter(
+  const count = [
+    filters.min_rating,
+    filters.min_reviews,
+    filters.contacted,
+    filters.has_email,
+    filters.sources?.length,
+    filters.phone_types?.length,
+    filters.has_phone,
+    filters.name,
+    filters.domain,
+    filters.campaign_ids?.length,
+    filters.exclude_campaign_ids?.length,
+  ].filter(
     (v) => v !== undefined && v !== null && v !== 0,
   ).length;
   const bool = (v: boolean | undefined) => (v === undefined ? '' : v ? 'yes' : 'no');
@@ -154,6 +215,13 @@ function MoreFilters({ filters, onChange }: { filters: LeadFilters; onChange: (f
           <Filter className="size-3.5" /> More filters
         </div>
         <div className="grid grid-cols-2 gap-3">
+          <Field label="Business name">
+            <Input inputSize="sm" value={filters.name ?? ''} onChange={(e) => set({ name: e.target.value || undefined })} placeholder="Contains…" />
+          </Field>
+          <Field label="Website / domain">
+            <Input inputSize="sm" value={filters.domain ?? ''} onChange={(e) => set({ domain: e.target.value || undefined })} placeholder="example.com" />
+          </Field>
+          <CampaignPickers filters={filters} set={set} />
           <Field label="Min rating">
             <NativeSelect inputSize="sm" value={filters.min_rating ?? ''} onChange={(e) => set({ min_rating: e.target.value ? Number(e.target.value) : undefined })}>
               <option value="">Any</option>
@@ -213,6 +281,111 @@ function MoreFilters({ filters, onChange }: { filters: LeadFilters; onChange: (f
             </NativeSelect>
           </Field>
         </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function CampaignPickers({ filters, set }: { filters: LeadFilters; set: (patch: Partial<LeadFilters>) => void }) {
+  const { data = [] } = useCampaigns();
+  const options = data.map((c) => ({ value: c.id, label: c.name }));
+  return (
+    <>
+      <Field label="In campaign" className="col-span-2">
+        <MultiSelect label="Any campaign" icon={<Megaphone />} className="w-full" options={options} value={filters.campaign_ids ?? []} onChange={(v) => set({ campaign_ids: v })} emptyText="No campaigns yet" />
+      </Field>
+      <Field label="Not in campaign" className="col-span-2">
+        <MultiSelect
+          label="None excluded"
+          icon={<Megaphone />}
+          className="w-full"
+          options={options}
+          value={filters.exclude_campaign_ids ?? []}
+          onChange={(v) => set({ exclude_campaign_ids: v })}
+          emptyText="No campaigns yet"
+        />
+      </Field>
+    </>
+  );
+}
+
+/** Team-shared filter combinations (public.saved_views). */
+function SavedFilters({ filters, onChange }: { filters: LeadFilters; onChange: (f: LeadFilters) => void }) {
+  const { workspace, userId, can } = useWorkspace();
+  const qc = useQueryClient();
+  const key = ['saved-views', workspace.id];
+  const [name, setName] = React.useState('');
+  const views = useQuery({
+    queryKey: key,
+    queryFn: async () => {
+      const { data, error } = await getSupabase().from('saved_views').select('*').eq('workspace_id', workspace.id).order('name');
+      if (error) throw error;
+      return data as SavedView[];
+    },
+  });
+  const save = useMutation({
+    mutationFn: async () => {
+      const { q: _q, ...rest } = filters;
+      const { error } = await getSupabase().from('saved_views').insert({ workspace_id: workspace.id, name: name.trim(), filters: rest, shared: true, created_by: userId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setName('');
+      toast.success('Filters saved for the team');
+      qc.invalidateQueries({ queryKey: key });
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await getSupabase().from('saved_views').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: key }),
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  const list = views.data ?? [];
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="sm">
+          <Bookmark /> Saved{list.length ? ` · ${list.length}` : ''}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 space-y-3" align="end">
+        <div className="flex items-center gap-2 text-[13px] font-semibold">
+          <Bookmark className="size-3.5" /> Saved filters
+        </div>
+        {list.length ? (
+          <ul className="max-h-60 space-y-1 overflow-y-auto">
+            {list.map((v) => (
+              <li key={v.id} className="group flex items-center gap-1">
+                <button type="button" onClick={() => onChange({ q: filters.q, ...v.filters })} className="flex-1 truncate rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-surface-2">
+                  {v.name}
+                </button>
+                {(v.created_by === userId || can.admin) && (
+                  <button type="button" onClick={() => remove.mutate(v.id)} aria-label={`Delete ${v.name}`} className="rounded p-1 text-subtle opacity-0 hover:text-danger group-hover:opacity-100">
+                    <Trash2 className="size-3.5" />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-subtle">Save a filter combination you use often — the whole team can reuse it.</p>
+        )}
+        <form
+          className="flex gap-2 border-t border-border pt-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (name.trim()) save.mutate();
+          }}
+        >
+          <Input inputSize="sm" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name these filters…" maxLength={60} aria-label="Saved filter name" />
+          <Button size="sm" type="submit" disabled={!name.trim() || countActiveFilters(filters) === 0} loading={save.isPending}>
+            Save
+          </Button>
+        </form>
       </PopoverContent>
     </Popover>
   );

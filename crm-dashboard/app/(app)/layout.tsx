@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import type { Profile, Role, Workspace } from '@batsols/shared';
+import type { MemberPermissions, Profile, Role, Workspace } from '@batsols/shared';
 import { AppShell } from '@/components/shell/app-shell';
 import { WorkspaceProvider, type SessionData } from '@/lib/workspace';
 import { createSupabaseServer } from '@/lib/supabase/server';
@@ -14,12 +14,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!user) redirect('/login');
 
   const [{ data: memberships }, { data: profile }] = await Promise.all([
-    supabase.from('workspace_members').select('role, workspace:workspaces(*)').eq('user_id', user.id),
+    supabase.from('workspace_members').select('role, permissions, workspace:workspaces(*)').eq('user_id', user.id),
     supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
   ]);
 
-  const list = ((memberships ?? []) as unknown as Array<{ role: Role; workspace: Workspace | null }>).filter(
-    (m): m is { role: Role; workspace: Workspace } => !!m.workspace,
+  const list = ((memberships ?? []) as unknown as Array<{ role: Role; permissions: MemberPermissions | null; workspace: Workspace | null }>).filter(
+    (m): m is { role: Role; permissions: MemberPermissions | null; workspace: Workspace } => !!m.workspace,
   );
   if (!list.length) redirect('/onboarding');
 
@@ -39,6 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     },
     workspace: current.workspace,
     role: current.role,
+    permissions: current.permissions ?? {},
     workspaces: list.map((m) => ({ id: m.workspace.id, name: m.workspace.name, role: m.role })).sort((a, b) => a.name.localeCompare(b.name)),
   };
 
