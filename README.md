@@ -12,6 +12,8 @@ supabase/        Database migrations (schema, row-level security, functions) + d
 legacy/, server/, Whatsapp Automation/   the old prototype (no longer used — safe to delete)
 ```
 
+Tech stack, architecture, deployment and operations: **[docs/Technical-Documentation.md](docs/Technical-Documentation.md)**.
+
 ## Features
 
 **Team & access**
