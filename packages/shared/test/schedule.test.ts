@@ -65,8 +65,8 @@ describe('safe daily limit', () => {
   const added = new Date('2026-10-01T09:00:00Z');
   const on = (day: number) => new Date(added.getTime() + day * 86400000 + 3600_000);
 
-  it('steps a new number up 10 → 20 → 40 over its first two weeks', () => {
-    expect([0, 3, 4, 7, 8, 13, 14, 60].map((d) => safeDailyLimit(60, null, added, on(d)))).toEqual([10, 10, 20, 20, 40, 40, 60, 60]);
+  it('steps a new number up 15 → 20 → 40 over its first two weeks', () => {
+    expect([0, 3, 4, 7, 8, 13, 14, 60].map((d) => safeDailyLimit(60, null, added, on(d)))).toEqual([15, 15, 20, 20, 40, 40, 60, 60]);
   });
 
   it('never allows more than 80 a day, and never more than the number\'s own limit', () => {
@@ -76,7 +76,7 @@ describe('safe daily limit', () => {
   });
 
   it('switching warm-up on restarts the ramp for an old number', () => {
-    expect(safeDailyLimit(60, on(20), added, on(21))).toBe(10);
+    expect(safeDailyLimit(60, on(20), added, on(21))).toBe(15);
     expect(safeDailyLimit(60, null, null, on(0))).toBe(60);
   });
 });

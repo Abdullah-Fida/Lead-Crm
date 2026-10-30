@@ -148,10 +148,10 @@ or get reported. The engine enforces these rules for every campaign, old ones in
 |---|---|
 | Gap between two messages from one number | at least 2 minutes (default 2.5–5 minutes), never regular |
 | Break | at least 15 minutes after at most 10 messages (default 20 minutes after 8) |
-| New numbers (first 14 days, or after warm-up is switched on) | 10 a day (days 1–4), 20 (days 5–8), 40 (days 9–14) |
+| New numbers (first 14 days, or after warm-up is switched on) | 15 a day (days 1–4), 20 (days 5–8), 40 (days 9–14) |
 | Any number | at most 80 messages a day |
 | "Is this number on WhatsApp?" look-ups | off by default before sending; at most 100 per number per day, 20–40 seconds apart; numbers already checked are not looked up again |
-| WhatsApp restricts a number | it rests at least 48 hours and its daily limit is halved (minimum 10) |
+| WhatsApp restricts a number | it rests at least 48 hours and its daily limit is halved (minimum 15) |
 | WhatsApp rate limit, or 5 failed sends in a row | the number rests 6 hours and the owner is notified |
 | Human-like behaviour | "online" only while sending, typing indicator, blue ticks 5–90 seconds after a lead's message |
 

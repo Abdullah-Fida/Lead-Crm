@@ -386,7 +386,7 @@ function NumberSettings({
           <div className="divide-y divide-border rounded-xl border border-border px-4">
             <SwitchRow
               label="Warm-up mode"
-              description="Restarts the 14-day ramp: 10 a day, then 20, then 40, then the full limit. New numbers always get it for their first 14 days."
+              description="Restarts the 14-day ramp: 15 a day, then 20, then 40, then the full limit. New numbers always get it for their first 14 days."
               checked={warmup}
               onCheckedChange={setWarmup}
             />
@@ -425,7 +425,7 @@ function NumberSettings({
 
 function SafetyTips() {
   const tips = [
-    { title: 'Safe mode is always on', text: `New numbers send 10, then 20, then 40 a day for two weeks; no number sends more than ${SAFE_MAX_DAILY} a day, 2+ minutes apart.` },
+    { title: 'Safe mode is always on', text: `New numbers send 15, then 20, then 40 a day for two weeks; no number sends more than ${SAFE_MAX_DAILY} a day, 2+ minutes apart.` },
     { title: 'Restrictions pause the number', text: 'If WhatsApp restricts a number it rests for 48 hours and its daily limit is halved; 5 failed sends in a row pause it for 6 hours.' },
     { title: 'Check numbers sparingly', text: `Looking up unknown numbers is a strong ban signal: at most ${SAFE_CHECKS_PER_DAY} checks per number a day. Campaigns don’t need it.` },
     { title: 'Start a conversation, not a pitch', text: 'A short personal question with {{business_name}} and {Hi|Hello} variations; no links until they reply; one follow-up at most.' },

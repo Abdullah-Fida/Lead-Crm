@@ -64,7 +64,7 @@ export class CheckLimitError extends Error {
 
 /** Safe mode: after WhatsApp restricts a number it rests at least this long, and its daily limit is halved. */
 const RESTRICTION_PAUSE_MS = 48 * 3600_000;
-const MIN_DAILY_LIMIT_AFTER_RESTRICTION = 10;
+const MIN_DAILY_LIMIT_AFTER_RESTRICTION = 15;
 
 const MAX_QR_ROUNDS = 6; // ~3 minutes of QR codes before giving up
 const BACKOFF = [1_000, 2_000, 5_000, 10_000, 20_000, 30_000, 60_000];

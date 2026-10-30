@@ -153,14 +153,14 @@ export const SAFE_MAX_DAILY = 80;
 export const SAFE_CHECKS_PER_DAY = 100;
 /** Safe mode: a new number (or one with warm-up switched on) steps up over its first 14 days. */
 const SAFE_WARMUP_STEPS: Array<[untilDay: number, limit: number]> = [
-  [4, 10],
+  [4, 15],
   [8, 20],
   [14, 40],
 ];
 
 /**
  * Messages a number may send today in safe mode. Its first 14 days — counted from when warm-up was switched on,
- * or else from when it was added — allow 10, then 20, then 40 a day; after that its own limit, never more than
+ * or else from when it was added — allow 15, then 20, then 40 a day; after that its own limit, never more than
  * SAFE_MAX_DAILY.
  */
 export function safeDailyLimit(dailyLimit: number, warmupStartedAt: Date | string | null, addedAt: Date | string | null, now: Date): number {
